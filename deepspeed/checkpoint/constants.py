@@ -6,6 +6,7 @@
 Various symbolic constants used for model checkpointing
 """
 
+
 #########################################
 # Optimizer checkpoint keys
 #########################################
@@ -40,8 +41,8 @@ ZERO_FILE_PREFIX = 'zero_pp_rank_'
 OPTIM_FILE_SUFFIX = '_optim_states.pt'
 MODEL_FILE_SUFFIX = '_model_states.pt'
 LAYER_FILE_PREFIX = 'layer_'
-BF16_ZERO_FILE_PREFIX = 'bf16_' + ZERO_FILE_PREFIX
-FP16_ZERO_FILE_PREFIX = 'fp16_' + ZERO_FILE_PREFIX
+BF16_ZERO_FILE_PREFIX = f'bf16_{ZERO_FILE_PREFIX}'
+FP16_ZERO_FILE_PREFIX = f'fp16_{ZERO_FILE_PREFIX}'
 
 #########################################
 # Checkpoint utility keys

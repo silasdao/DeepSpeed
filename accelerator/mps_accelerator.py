@@ -26,9 +26,7 @@ class MPS_Accelerator(DeepSpeedAccelerator):
 
     # Device APIs
     def device_name(self, device_index=None):
-        if device_index == None:
-            return "mps"
-        return "mps:{}".format(device_index)
+        return "mps" if device_index is None else f"mps:{device_index}"
 
     def device(self, device_index):
         return torch.device("mps", index=0)
@@ -203,10 +201,7 @@ class MPS_Accelerator(DeepSpeedAccelerator):
 
     def on_accelerator(self, tensor):
         device_str = str(tensor.device)
-        if device_str.startswith("mps"):
-            return True
-        else:
-            return False
+        return bool(device_str.startswith("mps"))
 
     def op_builder_dir(self):
         try:
@@ -221,9 +216,7 @@ class MPS_Accelerator(DeepSpeedAccelerator):
     # create an instance of op builder, specified by class_name
     def create_op_builder(self, op_name):
         builder_class = self.get_op_builder(op_name)
-        if builder_class != None:
-            return builder_class()
-        return None
+        return builder_class() if builder_class != None else None
 
     # return an op builder class, specified by class_name
     def get_op_builder(self, class_name):

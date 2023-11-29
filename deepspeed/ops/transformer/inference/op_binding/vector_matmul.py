@@ -42,8 +42,9 @@ class VectorMatMulOp(BaseOp):
     def forward(self, input: torch.Tensor, weight: torch.Tensor, async_op: bool = False):
         q_scale = weight.scale if hasattr(weight, 'scale') else torch.empty(1)
         q_int8 = self.config.dtype == torch.int8
-        output = self.vector_matmul_func(input, weight, async_op, q_scale, q_int8, self.config.transposed_mode)
-        return output
+        return self.vector_matmul_func(
+            input, weight, async_op, q_scale, q_int8, self.config.transposed_mode
+        )
 
     @staticmethod
     def _triton_autotune(min_seqlen, max_seqlen, hidden_size, dtype=torch.float16):

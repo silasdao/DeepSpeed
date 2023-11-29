@@ -102,9 +102,9 @@ class FlopsProfiler(object):
 
             def post_hook(module, input, output):
                 if module_flop_count:
-                    module.__flops__ += sum([elem[1] for elem in module_flop_count[-1]])
+                    module.__flops__ += sum(elem[1] for elem in module_flop_count[-1])
                     module_flop_count.pop()
-                    module.__macs__ += sum([elem[1] for elem in module_mac_count[-1]])
+                    module.__macs__ += sum(elem[1] for elem in module_mac_count[-1])
                     module_mac_count.pop()
 
             if not hasattr(module, "__post_hook_handle__"):
@@ -274,10 +274,15 @@ class FlopsProfiler(object):
         return params_to_string(total_params) if as_string else total_params
 
     def is_expert_tensor_parallelism_enabled(self):
-        for _, module in self.model.named_modules():
-            if isinstance(module, MoE) and hasattr(module, 'enable_expert_tensor_parallelism'):
-                return module.enable_expert_tensor_parallelism
-        return False
+        return next(
+            (
+                module.enable_expert_tensor_parallelism
+                for _, module in self.model.named_modules()
+                if isinstance(module, MoE)
+                and hasattr(module, 'enable_expert_tensor_parallelism')
+            ),
+            False,
+        )
 
     def print_model_profile(self, profile_step=1, module_depth=-1, top_modules=1, detailed=True, output_file=None):
         """Prints the model graph with the measured profile attached to each module.
@@ -571,13 +576,12 @@ def _conv_flops_compute(input, weight, bias=None, stride=1, padding=0, dilation=
     strides = stride if type(stride) is tuple else (stride, ) * length
     dilations = dilation if type(dilation) is tuple else (dilation, ) * length
     if isinstance(padding, str):
-        if padding == 'valid':
-            paddings = (0, ) * length
-        elif padding == 'same':
+        if padding == 'same':
             paddings = ()
             for d, k in zip(dilations, kernel_dims):
-                total_padding = d * (k - 1)
-                paddings += (total_padding // 2, )
+                paddings += (d * (k - 1) // 2, )
+        elif padding == 'valid':
+            paddings = (0, ) * length
     elif isinstance(padding, tuple):
         paddings = padding
     else:
@@ -595,10 +599,7 @@ def _conv_flops_compute(input, weight, bias=None, stride=1, padding=0, dilation=
     overall_conv_macs = conv_per_position_macs * active_elements_count
     overall_conv_flops = 2 * overall_conv_macs
 
-    bias_flops = 0
-    if bias is not None:
-        bias_flops = out_channels * active_elements_count
-
+    bias_flops = out_channels * active_elements_count if bias is not None else 0
     return int(overall_conv_flops + bias_flops), int(overall_conv_macs)
 
 
@@ -710,7 +711,7 @@ def _upsample_flops_compute(*args, **kwargs):
         size = args[1]
 
     if size is not None:
-        if isinstance(size, tuple) or isinstance(size, list):
+        if isinstance(size, (tuple, list)):
             return int(_prod(size)), 0
         else:
             return int(size), 0
@@ -804,10 +805,7 @@ def _add_flops_compute(input, other, *, alpha=1, out=None):
 
 def _elementwise_flops_compute(input, other):
     if not torch.is_tensor(input):
-        if torch.is_tensor(other):
-            return _prod(other.shape), 0
-        else:
-            return 1, 0
+        return (_prod(other.shape), 0) if torch.is_tensor(other) else (1, 0)
     elif not torch.is_tensor(other):
         return _prod(input.shape), 0
     else:
@@ -1015,16 +1013,13 @@ def _rnn_forward_hook(rnn_module, input, output):
     num_layers = rnn_module.num_layers
 
     for i in range(num_layers):
-        w_ih = rnn_module.__getattr__("weight_ih_l" + str(i))
-        w_hh = rnn_module.__getattr__("weight_hh_l" + str(i))
-        if i == 0:
-            input_size = rnn_module.input_size
-        else:
-            input_size = rnn_module.hidden_size
+        w_ih = rnn_module.__getattr__(f"weight_ih_l{str(i)}")
+        w_hh = rnn_module.__getattr__(f"weight_hh_l{str(i)}")
+        input_size = rnn_module.input_size if i == 0 else rnn_module.hidden_size
         flops = _rnn_flops(flops, rnn_module, w_ih, w_hh, input_size)
         if rnn_module.bias:
-            b_ih = rnn_module.__getattr__("bias_ih_l" + str(i))
-            b_hh = rnn_module.__getattr__("bias_hh_l" + str(i))
+            b_ih = rnn_module.__getattr__(f"bias_ih_l{str(i)}")
+            b_hh = rnn_module.__getattr__(f"bias_hh_l{str(i)}")
             flops += b_ih.shape[0] + b_hh.shape[0]
 
     flops *= batch_size
@@ -1082,21 +1077,20 @@ def number_to_string(num, units=None, precision=DEFAULT_PRECISION):
             magnitude, units = 1e-3, "m"
         else:
             magnitude, units = 1e-6, "u"
+    elif units == "G":
+        magnitude = 1e9
+    elif units == "K":
+        magnitude = 1e3
+    elif units == "M":
+        magnitude = 1e6
+    elif units == "T":
+        magnitude = 1e12
+    elif units == "m":
+        magnitude = 1e-3
+    elif units == "u":
+        magnitude = 1e-6
     else:
-        if units == "T":
-            magnitude = 1e12
-        elif units == "G":
-            magnitude = 1e9
-        elif units == "M":
-            magnitude = 1e6
-        elif units == "K":
-            magnitude = 1e3
-        elif units == "m":
-            magnitude = 1e-3
-        elif units == "u":
-            magnitude = 1e-6
-        else:
-            magnitude = 1
+        magnitude = 1
     return f"{round(num / magnitude, precision):g} {units}"
 
 

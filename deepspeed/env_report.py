@@ -71,7 +71,9 @@ def nvcc_version():
     if cuda_home is None:
         return f"{RED} [FAIL] cannot find CUDA_HOME via torch.utils.cpp_extension.CUDA_HOME={torch.utils.cpp_extension.CUDA_HOME} {END}"
     try:
-        output = subprocess.check_output([cuda_home + "/bin/nvcc", "-V"], universal_newlines=True)
+        output = subprocess.check_output(
+            [f"{cuda_home}/bin/nvcc", "-V"], universal_newlines=True
+        )
     except FileNotFoundError:
         return f"{RED} [FAIL] nvcc missing {END}"
     output_split = output.split()
@@ -83,7 +85,7 @@ def nvcc_version():
 def get_shm_size():
     try:
         shm_stats = os.statvfs('/dev/shm')
-    except (OSError, FileNotFoundError, ValueError):
+    except (OSError, ValueError):
         return "UNKNOWN", None
 
     shm_size = shm_stats.f_frsize * shm_stats.f_blocks
@@ -144,8 +146,7 @@ def parse_arguments():
                         action='store_true',
                         help='Suppress display of installation and compatibility statuses of DeepSpeed operators. ')
     parser.add_argument('--hide_errors_and_warnings', action='store_true', help='Suppress warning and error messages.')
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def main(hide_operator_status=False, hide_errors_and_warnings=False):

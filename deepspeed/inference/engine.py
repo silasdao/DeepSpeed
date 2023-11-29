@@ -100,14 +100,13 @@ class InferenceEngine(Module):
             self.remove_mask_prepare_for_bloom()
 
         if self.injection_dict or not config.replace_with_kernel_inject:
-            # This is a hack to redefine the alibi func due to TP
             if config.tensor_parallel.tp_size > 1:
                 self.build_alibi_tensor()
                 self.build_attn_bias()
 
         if get_accelerator().device_name() == 'cuda' and config.enable_cuda_graph:
             assert pkg_version.parse(torch.__version__) >= pkg_version.parse("1.10"), \
-                "If you want to use cuda graph, please upgrade torch to at least v1.10"
+                    "If you want to use cuda graph, please upgrade torch to at least v1.10"
 
         # Check if model passed to engine is loaded w/ meta tensors, in which case
         # kernel injection must be enabled.
@@ -143,31 +142,30 @@ class InferenceEngine(Module):
                                   torch.nn.Module), f"{client_module} is not a subclass of torch.nn.Module"
 
                 # construct the tuple and pass that instead of a string or dict.
-                if isinstance(injection_policy, str):
-                    config.injection_policy_tuple = (injection_policy, )
-                else:
-                    config.injection_policy_tuple = injection_policy
-
+                config.injection_policy_tuple = (
+                    (injection_policy,)
+                    if isinstance(injection_policy, str)
+                    else injection_policy
+                )
                 layer_names = [name for name, _ in self.module.named_modules()]
                 for policy in config.injection_policy_tuple:
                     if not any(name.endswith(policy) for name in layer_names):
                         raise ValueError(f"Injection policy layer'{policy}' not valid.")
 
                 self._apply_injection_policy(config, client_module)
-        else:
-            if config.replace_with_kernel_inject:
-                # 2. DeepSpeed Kernel Injection
-                self._apply_injection_policy(config)
-            elif config.tensor_parallel.tp_size > 1:
-                # 3. Automatic Tensor Parallelism
-                parser_dict = AutoTP.tp_parser(model)
-                print("AutoTP: ", parser_dict)
-                for client_module, injection_policy in parser_dict:
-                    if isinstance(injection_policy, str):
-                        config.injection_policy_tuple = (injection_policy, )
-                    else:
-                        config.injection_policy_tuple = injection_policy
-                    self._apply_injection_policy(config, client_module)
+        elif config.replace_with_kernel_inject:
+            # 2. DeepSpeed Kernel Injection
+            self._apply_injection_policy(config)
+        elif config.tensor_parallel.tp_size > 1:
+            # 3. Automatic Tensor Parallelism
+            parser_dict = AutoTP.tp_parser(model)
+            print("AutoTP: ", parser_dict)
+            for client_module, injection_policy in parser_dict:
+                if isinstance(injection_policy, str):
+                    config.injection_policy_tuple = (injection_policy, )
+                else:
+                    config.injection_policy_tuple = injection_policy
+                self._apply_injection_policy(config, client_module)
 
         device = get_accelerator().current_device_name()
         self.module.to(device)
@@ -251,7 +249,7 @@ class InferenceEngine(Module):
             local_rank = int(os.getenv('LOCAL_RANK', '0'))
             get_accelerator().set_device(local_rank)
 
-            ranks = [i for i in range(config.tensor_parallel.tp_size)]
+            ranks = list(range(config.tensor_parallel.tp_size))
             self.mp_group = dist.new_group(ranks)
             InferenceEngine.inference_mp_group = self.mp_group
         else:
@@ -335,33 +333,41 @@ class InferenceEngine(Module):
                                                                                        device="cpu"),
                                                                  requires_grad=module.weight.data.requires_grad)
                 if 'query_key_value' in prefix:
-                    module.weight = self.mp_replace.strided_copy(module.weight.data,
-                                                                 state_dict[prefix + 'weight'],
-                                                                 num_splits=3)
+                    module.weight = self.mp_replace.strided_copy(
+                        module.weight.data,
+                        state_dict[f'{prefix}weight'],
+                        num_splits=3,
+                    )
                 else:
-                    module.weight = self.mp_replace.copy(module.weight.data, state_dict[prefix + 'weight'])
+                    module.weight = self.mp_replace.copy(
+                        module.weight.data, state_dict[f'{prefix}weight']
+                    )
             else:
                 if module.norm.weight.data.is_meta:
                     # meta tensor cannot be casted or copied to, so we need to replace it with a normal tensor here
                     module.norm.weight = torch.nn.parameter.Parameter(
                         data=torch.empty_like(module.norm.weight.data, device="cpu"),
                         requires_grad=module.norm.weight.data.requires_grad)
-                module.norm.weight = self.mp_replace.copy(module.norm.weight.data, state_dict[prefix + 'weight'])
-            if prefix + 'bias' in self.key_list:
+                module.norm.weight = self.mp_replace.copy(
+                    module.norm.weight.data, state_dict[f'{prefix}weight']
+                )
+            if f'{prefix}bias' in self.key_list:
                 if hasattr(module, 'norm'):
                     if module.norm.bias.data.is_meta:
                         # meta tensor cannot be casted or copied to, so we need to replace it with a normal tensor here
                         module.norm.bias = torch.nn.parameter.Parameter(
                             data=torch.empty_like(module.norm.bias.data, device="cpu"),
                             requires_grad=module.norm.bias.data.requires_grad)
-                    module.norm.bias = self.mp_replace.copy(module.norm.bias, state_dict[prefix + 'bias'])
+                    module.norm.bias = self.mp_replace.copy(
+                        module.norm.bias, state_dict[f'{prefix}bias']
+                    )
                 else:
                     if module.bias.data.is_meta:
                         # meta tensor cannot be casted or copied to, so we need to replace it with a normal tensor here
                         module.bias = torch.nn.parameter.Parameter(data=torch.empty_like(module.bias.data,
                                                                                          device="cpu"),
                                                                    requires_grad=module.bias.data.requires_grad)
-                    data = state_dict[prefix + 'bias']
+                    data = state_dict[f'{prefix}bias']
                     data = data.to(get_accelerator().current_device_name())
                     module.bias = self.mp_replace.copy(module.bias, data)
 
@@ -377,9 +383,12 @@ class InferenceEngine(Module):
             for name, child in module.named_children():
                 if child.__class__ in layer_policies:
                     checking_key = prefix + name + '.'
-                    if not any(checking_key in item for item in self.key_list):
+                    if all(checking_key not in item for item in self.key_list):
                         continue
-                    if len(list(child.parameters())) > 0 and list(child.parameters())[0].numel() == 0:
+                    if (
+                        list(child.parameters())
+                        and list(child.parameters())[0].numel() == 0
+                    ):
                         if len(child.weight.ds_shape) == 1:
                             child = Normalize(dim=child.weight.ds_shape[-1], dtype=child.weight.dtype, eps=child.eps)
                             setattr(module, name, child)
@@ -425,11 +434,7 @@ class InferenceEngine(Module):
             mp_rank = 0 if self.mpu is None else self.mpu.get_model_parallel_rank()
             mp_rank_str = "{:02d}".format(mp_rank)
 
-        ckpt_name = os.path.join(
-            checkpoints_path,
-            "mp_rank_" + mp_rank_str + "_model_states.pt",
-        )
-        return ckpt_name
+        return os.path.join(checkpoints_path, f"mp_rank_{mp_rank_str}_model_states.pt")
 
     def _load_checkpoint(self, load_dir, load_module_strict=True, tag=None):
         is_pipe_parallel = isinstance(self.module, PipelineModule)
@@ -476,9 +481,7 @@ class InferenceEngine(Module):
             moe, _ = has_moe_layers(self.module)
             if moe:
                 from deepspeed.runtime.engine import DeepSpeedEngine
-                old_moe_load = False
-                if not isinstance(checkpoint['num_experts'], list):
-                    old_moe_load = True
+                old_moe_load = not isinstance(checkpoint['num_experts'], list)
                 DeepSpeedEngine.load_moe_state_dict(load_dir,
                                                     tag,
                                                     state_dict=checkpoint[self._choose_module_key(checkpoint)],
@@ -491,8 +494,9 @@ class InferenceEngine(Module):
                                         strict=load_module_strict)
 
     def _choose_module_key(self, sd):
-        assert not ('module' in sd
-                    and 'model' in sd), "checkpoint has both 'model' and 'module' keys, not sure how to proceed"
+        assert (
+            'module' not in sd or 'model' not in sd
+        ), "checkpoint has both 'model' and 'module' keys, not sure how to proceed"
         assert 'module' in sd or 'model' in sd, "checkpoint contains neither 'model' or 'module' keys, not sure how to proceed"
         if 'module' in sd:
             return 'module'
@@ -503,11 +507,7 @@ class InferenceEngine(Module):
         if not isinstance(self.module, torch.nn.Module):
             return
 
-        if False:  #config.dtype is torch.int8 and self.quantization_scales is None:
-            quantizer = WeightQuantization(mlp_extra_grouping=self.mlp_extra_grouping)
-            model, self.quantization_scales = quantizer.model_quantize(self.module, self.injection_dict,
-                                                                       self.quantize_bits, self.quantize_groups)
-        elif config.dtype == torch.half:
+        if config.dtype == torch.half:
             self.module.half()
         elif config.dtype == torch.bfloat16:
             self.module.bfloat16()
@@ -519,7 +519,7 @@ class InferenceEngine(Module):
         cuda_stream = get_accelerator().Stream()
         cuda_stream.wait_stream(get_accelerator().current_stream())
         with get_accelerator().stream(cuda_stream):
-            for i in range(3):
+            for _ in range(3):
                 ret = self.module(*inputs, **kwargs)
         get_accelerator().current_stream().wait_stream(cuda_stream)
 
@@ -564,15 +564,14 @@ class InferenceEngine(Module):
     def _local_cuda_graph_used(self, module):
         if isinstance(module, torch.nn.Module):
             return False
-        else:
-            sub_module_cuda_graph = False
-            for name in module.__dict__.keys():
-                sub_module = getattr(module, name)
+        sub_module_cuda_graph = False
+        for name in module.__dict__.keys():
+            sub_module = getattr(module, name)
 
-                if self._module_match(sub_module) and hasattr(sub_module, "enable_cuda_graph"):
-                    sub_module_cuda_graph = True
+            if self._module_match(sub_module) and hasattr(sub_module, "enable_cuda_graph"):
+                sub_module_cuda_graph = True
 
-            return sub_module_cuda_graph
+        return sub_module_cuda_graph
 
     def forward(self, *inputs, **kwargs):
         """Execute forward propagation
@@ -587,12 +586,9 @@ class InferenceEngine(Module):
             start = time.time()
 
         if get_accelerator().device_name() == 'cuda' and self._config.enable_cuda_graph and not self.local_cuda_graph:
-            if self.cuda_graph_created:
-                outputs = self._graph_replay(*inputs, **kwargs)
-            else:
+            if not self.cuda_graph_created:
                 self._create_cuda_graph(*inputs, **kwargs)
-                outputs = self._graph_replay(*inputs, **kwargs)
-
+            outputs = self._graph_replay(*inputs, **kwargs)
         else:
             outputs = self.module(*inputs, **kwargs)
 

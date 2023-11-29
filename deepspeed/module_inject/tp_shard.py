@@ -21,7 +21,7 @@ def get_shard_size(total_size, mp_size, rank=None):
     global num_kv_heads
     # When we have num_kv_heads defined, uneven division is possible, otherwise enforce even division
     if num_kv_heads != None:
-        if (rank == None):
+        if rank is None:
             rank = dist.get_rank()
         my_slices = (num_kv_heads // mp_size) + (1 if rank < (num_kv_heads % mp_size) else 0)
         return total_size * my_slices // num_kv_heads
@@ -33,7 +33,4 @@ def get_shard_size(total_size, mp_size, rank=None):
 
 
 def get_shard_size_list(total_size, mp_size):
-    shard_sizes = []
-    for i in range(mp_size):
-        shard_sizes.append(get_shard_size(total_size, mp_size, i))
-    return shard_sizes
+    return [get_shard_size(total_size, mp_size, i) for i in range(mp_size)]

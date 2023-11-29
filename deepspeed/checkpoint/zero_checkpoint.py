@@ -61,11 +61,7 @@ class ZeROCheckpoint(object):
             if strip_tensor_paddings:
                 self._strip_tensor_paddings(sd)
 
-            if merged_sd is None:
-                merged_sd = sd
-            else:
-                merged_sd = merge_state(merged_sd, sd)
-
+            merged_sd = sd if merged_sd is None else merge_state(merged_sd, sd)
             self._update_partition_count(merged_sd)
             if strip_tensor_paddings:
                 self._clear_group_paddings(merged_sd)
@@ -110,8 +106,7 @@ class ZeROCheckpoint(object):
                     group_state[state_name] = torch.narrow(state_value, 0, 0, raw_length).clone()
 
     def _clear_group_paddings(self, sd):
-        group_paddings = self._get_optimizer_state(sd, GROUP_PADDINGS)
-        if group_paddings:
+        if group_paddings := self._get_optimizer_state(sd, GROUP_PADDINGS):
             num_groups = len(group_paddings)
             sd[OPTIMIZER_STATE_DICT][GROUP_PADDINGS] = [0] * num_groups
 
@@ -134,7 +129,6 @@ class ZeROCheckpoint(object):
         return base_optimizer_state.get(GROUP_STATE_KEY, None)
 
     def _update_partition_count(self, sd):
-        partition_counts = self._get_optimizer_state(sd, PARTITION_COUNT)
-        if partition_counts:
+        if partition_counts := self._get_optimizer_state(sd, PARTITION_COUNT):
             num_groups = len(partition_counts)
             sd[OPTIMIZER_STATE_DICT][PARTITION_COUNT] = [self.target_3d.dp_degree] * num_groups

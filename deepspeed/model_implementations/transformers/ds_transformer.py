@@ -60,17 +60,16 @@ class DeepSpeedTransformerInference(nn.Module):
         if DeepSpeedTransformerInference.layer_id == 1:
             log_dist(f"DeepSpeed-Inference config: {self.config.__dict__}", [0])
             if deepspeed.HAS_TRITON and self.config.use_triton:
-                log_dist(f"Injecting Triton kernels ...", [0])
+                log_dist("Injecting Triton kernels ...", [0])
 
         if self.config.bigscience_bloom:
             self.attention = BloomSelfAttention(self.config, mp_group, quantize_scales, quantize_groups, merge_count)
             assert not self.config.use_triton
+        elif deepspeed.HAS_TRITON and self.config.use_triton:
+            self.attention = TritonSelfAttention(self.config)
         else:
-            if deepspeed.HAS_TRITON and self.config.use_triton:
-                self.attention = TritonSelfAttention(self.config)
-            else:
-                self.attention = DeepSpeedSelfAttention(self.config, mp_group, quantize_scales, quantize_groups,
-                                                        merge_count)
+            self.attention = DeepSpeedSelfAttention(self.config, mp_group, quantize_scales, quantize_groups,
+                                                    merge_count)
 
         if deepspeed.HAS_TRITON and self.config.use_triton:
             self.mlp = TritonMLP(self.config)
@@ -89,12 +88,10 @@ class DeepSpeedTransformerInference(nn.Module):
                                        requires_grad=False)
         self.layer_past = None
         try:
-            if config.dtype == torch.float32:
+            if config.dtype == torch.float32 or config.dtype != torch.bfloat16:
                 self.allocate_workspace = inference_module.allocate_workspace_fp32
-            elif config.dtype == torch.bfloat16:
-                self.allocate_workspace = inference_module.allocate_workspace_bf16
             else:
-                self.allocate_workspace = inference_module.allocate_workspace_fp32
+                self.allocate_workspace = inference_module.allocate_workspace_bf16
             self._alloc_workspace = True
         except AttributeError:
             self.allocate_workspace = None

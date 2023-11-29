@@ -43,9 +43,16 @@ class LinearOp(BaseOp):
                 num_heads: int,
                 external_cache: bool = None,
                 num_layers: int = None):
-        qkv_out = self.linear_func(input, weight, bias, add_bias, do_flash_attn, num_heads,
-                                   self.config.transposed_mode, self.config.rope_theta)
-        return qkv_out
+        return self.linear_func(
+            input,
+            weight,
+            bias,
+            add_bias,
+            do_flash_attn,
+            num_heads,
+            self.config.transposed_mode,
+            self.config.rope_theta,
+        )
 
     @staticmethod
     def _triton_autotune(min_seqlen, max_seqlen, hidden_size, dtype=torch.float16):

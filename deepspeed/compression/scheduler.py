@@ -64,99 +64,93 @@ class compression_scheduler():
         wq = self.different_compression_methods[WEIGHT_QUANTIZATION]
         if not wq[TECHNIQUE_ENABLED]:
             return
-        else:
-            shared_parameters = wq[SHARED_PARAMETERS]
-            if self.training_steps >= shared_parameters[TECHNIQUE_SCHEDULE_OFFSET]:
-                for group_name, module_name_list, method_parameters in wq[DIFFERENT_GROUPS]:
-                    for module_name in module_name_list:
-                        module = recursive_getattr(self.model, module_name)
-                        module.weight_quantization_enabled = True
+        shared_parameters = wq[SHARED_PARAMETERS]
+        if self.training_steps >= shared_parameters[TECHNIQUE_SCHEDULE_OFFSET]:
+            for group_name, module_name_list, method_parameters in wq[DIFFERENT_GROUPS]:
+                for module_name in module_name_list:
+                    module = recursive_getattr(self.model, module_name)
+                    module.weight_quantization_enabled = True
 
-                if not self.verbose[WEIGHT_QUANTIZATION]:
-                    logger.info(f'Weight quantization is enabled at step {self.training_steps}')
-                    self.weight_quantization_enabled = True
-                    self.verbose[WEIGHT_QUANTIZATION] = True
+            if not self.verbose[WEIGHT_QUANTIZATION]:
+                logger.info(f'Weight quantization is enabled at step {self.training_steps}')
+                self.weight_quantization_enabled = True
+                self.verbose[WEIGHT_QUANTIZATION] = True
 
     def check_activation_quantization(self):
         # check activation quantization
         aq = self.different_compression_methods[ACTIVATION_QUANTIZATION]
         if not aq[TECHNIQUE_ENABLED]:
             return
-        else:
-            shared_parameters = aq[SHARED_PARAMETERS]
-            if self.training_steps >= shared_parameters[TECHNIQUE_SCHEDULE_OFFSET]:
-                for group_name, module_name_list, method_parameters in aq[DIFFERENT_GROUPS]:
-                    for module_name in module_name_list:
-                        module = recursive_getattr(self.model, module_name)
-                        module.activation_quantization_enabled = True
-                if not self.verbose[ACTIVATION_QUANTIZATION]:
-                    logger.info(f'Activation quantization is enabled at step {self.training_steps}')
-                    self.verbose[ACTIVATION_QUANTIZATION] = True
+        shared_parameters = aq[SHARED_PARAMETERS]
+        if self.training_steps >= shared_parameters[TECHNIQUE_SCHEDULE_OFFSET]:
+            for group_name, module_name_list, method_parameters in aq[DIFFERENT_GROUPS]:
+                for module_name in module_name_list:
+                    module = recursive_getattr(self.model, module_name)
+                    module.activation_quantization_enabled = True
+            if not self.verbose[ACTIVATION_QUANTIZATION]:
+                logger.info(f'Activation quantization is enabled at step {self.training_steps}')
+                self.verbose[ACTIVATION_QUANTIZATION] = True
 
     def check_sparse_pruning(self):
         # check sparse pruning
         sp = self.different_compression_methods[SPARSE_PRUNING]
         if not sp[TECHNIQUE_ENABLED]:
             return
-        else:
-            shared_parameters = sp[SHARED_PARAMETERS]
-            if shared_parameters[TECHNIQUE_SCHEDULE_OFFSET] <= self.training_steps <= shared_parameters[
-                    TECHNIQUE_SCHEDULE_OFFSET_END]:
-                for group_name, module_name_list, method_parameters in sp[DIFFERENT_GROUPS]:
-                    for module_name in module_name_list:
-                        module = recursive_getattr(self.model, module_name)
-                        module.sparse_pruning_enabled = True
-                if not self.verbose[SPARSE_PRUNING]:
-                    logger.info(f'Sparse pruning is enabled at step {self.training_steps}')
-                    self.verbose[SPARSE_PRUNING] = True
+        shared_parameters = sp[SHARED_PARAMETERS]
+        if shared_parameters[TECHNIQUE_SCHEDULE_OFFSET] <= self.training_steps <= shared_parameters[
+                TECHNIQUE_SCHEDULE_OFFSET_END]:
+            for group_name, module_name_list, method_parameters in sp[DIFFERENT_GROUPS]:
+                for module_name in module_name_list:
+                    module = recursive_getattr(self.model, module_name)
+                    module.sparse_pruning_enabled = True
+            if not self.verbose[SPARSE_PRUNING]:
+                logger.info(f'Sparse pruning is enabled at step {self.training_steps}')
+                self.verbose[SPARSE_PRUNING] = True
 
     def check_head_pruning(self):
         # check head pruning
         hp = self.different_compression_methods[HEAD_PRUNING]
         if not hp[TECHNIQUE_ENABLED]:
             return
-        else:
-            shared_parameters = hp[SHARED_PARAMETERS]
-            if self.training_steps >= shared_parameters[TECHNIQUE_SCHEDULE_OFFSET]:
-                for group_name, module_name_list, method_parameters in hp[DIFFERENT_GROUPS]:
-                    for module_name in module_name_list:
-                        module = recursive_getattr(self.model, module_name)
-                        module.head_pruning_enabled = True
-                if not self.verbose[HEAD_PRUNING]:
-                    logger.info(f'Head pruning is enabled at step {self.training_steps}')
-                    self.verbose[HEAD_PRUNING] = True
+        shared_parameters = hp[SHARED_PARAMETERS]
+        if self.training_steps >= shared_parameters[TECHNIQUE_SCHEDULE_OFFSET]:
+            for group_name, module_name_list, method_parameters in hp[DIFFERENT_GROUPS]:
+                for module_name in module_name_list:
+                    module = recursive_getattr(self.model, module_name)
+                    module.head_pruning_enabled = True
+            if not self.verbose[HEAD_PRUNING]:
+                logger.info(f'Head pruning is enabled at step {self.training_steps}')
+                self.verbose[HEAD_PRUNING] = True
 
     def check_row_pruning(self):
         # check row pruning
         rp = self.different_compression_methods[ROW_PRUNING]
         if not rp[TECHNIQUE_ENABLED]:
             return
-        else:
-            shared_parameters = rp[SHARED_PARAMETERS]
-            if self.training_steps >= shared_parameters[TECHNIQUE_SCHEDULE_OFFSET]:
-                for group_name, module_name_list, method_parameters in rp[DIFFERENT_GROUPS]:
-                    for module_name in module_name_list:
-                        module = recursive_getattr(self.model, module_name)
-                        module.row_pruning_enabled = True
-                if not self.verbose[ROW_PRUNING]:
-                    logger.info(f'Row pruning is enabled at step {self.training_steps}')
-                    self.verbose[ROW_PRUNING] = True
+        shared_parameters = rp[SHARED_PARAMETERS]
+        if self.training_steps >= shared_parameters[TECHNIQUE_SCHEDULE_OFFSET]:
+            for group_name, module_name_list, method_parameters in rp[DIFFERENT_GROUPS]:
+                for module_name in module_name_list:
+                    module = recursive_getattr(self.model, module_name)
+                    module.row_pruning_enabled = True
+            if not self.verbose[ROW_PRUNING]:
+                logger.info(f'Row pruning is enabled at step {self.training_steps}')
+                self.verbose[ROW_PRUNING] = True
 
     def check_channel_pruning(self):
         # check channel pruning
         cp = self.different_compression_methods[CHANNEL_PRUNING]
         if not cp[TECHNIQUE_ENABLED]:
             return
-        else:
-            shared_parameters = cp[SHARED_PARAMETERS]
-            if self.training_steps >= shared_parameters[TECHNIQUE_SCHEDULE_OFFSET]:
-                for group_name, module_name_list, method_parameters in cp[DIFFERENT_GROUPS]:
-                    for module_name in module_name_list:
-                        module = recursive_getattr(self.model, module_name)
-                        module.channel_pruning_enabled = True
-                if not self.verbose[CHANNEL_PRUNING]:
-                    logger.info(f'Channel pruning is enabled at step {self.training_steps}')
-                    self.verbose[CHANNEL_PRUNING] = True
+        shared_parameters = cp[SHARED_PARAMETERS]
+        if self.training_steps >= shared_parameters[TECHNIQUE_SCHEDULE_OFFSET]:
+            for group_name, module_name_list, method_parameters in cp[DIFFERENT_GROUPS]:
+                for module_name in module_name_list:
+                    module = recursive_getattr(self.model, module_name)
+                    module.channel_pruning_enabled = True
+            if not self.verbose[CHANNEL_PRUNING]:
+                logger.info(f'Channel pruning is enabled at step {self.training_steps}')
+                self.verbose[CHANNEL_PRUNING] = True
 
     def check_all_modules(self):
         # check all different compression methods we have

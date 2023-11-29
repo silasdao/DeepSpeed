@@ -31,7 +31,7 @@ def get_transformer_name(replaced_module):
     transformer_name = ''
     for n, c in replaced_module.named_children():
         if c.__class__ in supported_models:
-            transformer_name += n + '.'
+            transformer_name += f'{n}.'
             for name, child in c.named_children():
                 if child.__class__ is ModuleList:
                     transformer_name += name
@@ -128,9 +128,7 @@ def generic_injection(module, dtype=None, enable_cuda_graph=True):
         config = Diffusers2DTransformerConfig()
         return DeepSpeedDiffusersTransformerBlock(child, config)
 
-    if isinstance(module, torch.nn.Module):
-        pass
-    else:
+    if not isinstance(module, torch.nn.Module):
         if dtype not in [torch.float16, torch.half]:
             raise ValueError("Generic injection only supported with FP16")
 
@@ -433,7 +431,7 @@ def replace_transformer_layer(orig_layer_impl, model, checkpoint_dict, config, m
         if dist.is_initialized():
             dist.barrier()
         transformer_name = get_transformer_name(replaced_module)
-        non_tp_ckpt_name = f'non-tp.pt'
+        non_tp_ckpt_name = 'non-tp.pt'
         ckpt_files = [non_tp_ckpt_name]
         os.makedirs(config.save_mp_checkpoint_path, exist_ok=True)
 
@@ -561,21 +559,19 @@ def replace_module(model, orig_class, replace_fn, _replace_policy, checkpoint=No
     Returns:
         A modified ``model``.
     """
-    sd = None
-    if checkpoint is not None:
-        sd = torch.load(checkpoint, map_location='cpu')
+    sd = None if checkpoint is None else torch.load(checkpoint, map_location='cpu')
     policy = {}
     if orig_class is not None:
-        policy.update({orig_class: (replace_fn, _replace_policy)})
+        policy[orig_class] = (replace_fn, _replace_policy)
     else:
         for plcy in replace_policies:
             # instantiate a throw-away policy in order to populate the _orig_layer_class
             _ = plcy(None)
             if isinstance(plcy._orig_layer_class, list):
                 for orig_layer_class in plcy._orig_layer_class:
-                    policy.update({orig_layer_class: (replace_fn, plcy)})
+                    policy[orig_layer_class] = (replace_fn, plcy)
             elif plcy._orig_layer_class is not None:
-                policy.update({plcy._orig_layer_class: (replace_fn, plcy)})
+                policy[plcy._orig_layer_class] = (replace_fn, plcy)
     assert len(policy.items()) > 0,\
         "No default policy found! Please specify your policy injection_policy (like {BertLayer:HFBEertLayerPolicy})." +\
         "You can find some samples here: https://github.com/microsoft/DeepSpeed/blob/master/deepspeed/module_inject/replace_policy.py"
@@ -601,9 +597,7 @@ def skip_level_0_prefix(model, state_dict):
         for item in state_dict.keys():
             if re.match("^model[.]", item):
                 return False
-    if key is not None and key.group(1).lower() in ["bloom", "opt"]:
-        return True
-    return False
+    return key is not None and key.group(1).lower() in ["bloom", "opt"]
 
 
 def _replace_module(model, policies, prefix='', layer_id=0, level_id=0, state_dict=None):

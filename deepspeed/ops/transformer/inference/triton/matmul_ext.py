@@ -54,8 +54,8 @@ class AutotuneCacheManager:
         if self.cache_dir:
             os.makedirs(self.cache_dir, exist_ok=True)
         if self.cache_dir:
-            self.file_path = os.path.join(self.cache_dir, self.key + ".pickle")
-            self.lock_path = self.file_path + ".lock"
+            self.file_path = os.path.join(self.cache_dir, f"{self.key}.pickle")
+            self.lock_path = f"{self.file_path}.lock"
 
     def has_file(self):
         return self.file_path and os.path.exists(self.file_path)
@@ -64,9 +64,9 @@ class AutotuneCacheManager:
         if self.file_path:
             assert self.lock_path is not None
             with FileLock(self.lock_path):
-                with open(self.file_path + ".tmp", 'wb') as handle:
+                with open(f"{self.file_path}.tmp", 'wb') as handle:
                     pickle.dump(table, handle)
-                os.rename(self.file_path + ".tmp", self.file_path)
+                os.rename(f"{self.file_path}.tmp", self.file_path)
 
     def load(self):
         if os.path.exists(self.file_path):
@@ -124,14 +124,12 @@ class TritonMatmul(torch.autograd.Function):
 
     @staticmethod
     def _ref_forward(A, B, ref_dtype=torch.float32):
-        C = torch.matmul(A.type(ref_dtype), B.type(ref_dtype))
-        return C
+        return torch.matmul(A.type(ref_dtype), B.type(ref_dtype))
 
     @staticmethod
     def _read_autotune_table(cache_key, triton_kernel):
         cache_manager = AutotuneCacheManager(cache_key)
-        table = cache_manager.load()
-        if table:
+        if table := cache_manager.load():
             triton_kernel.cache = table
 
     @staticmethod
@@ -408,18 +406,30 @@ class Fp16Matmul(TritonMatmul):
 
     @staticmethod
     def _read_autotune_table():
-        TritonMatmul._read_autotune_table(__class__.__name__ + "_2d_kernel", __class__._2d_kernel)
-        TritonMatmul._read_autotune_table(__class__.__name__ + "_4d_kernel", __class__._4d_kernel)
+        TritonMatmul._read_autotune_table(
+            f"{__class__.__name__}_2d_kernel", __class__._2d_kernel
+        )
+        TritonMatmul._read_autotune_table(
+            f"{__class__.__name__}_4d_kernel", __class__._4d_kernel
+        )
 
     @staticmethod
     def _write_autotune_table():
-        TritonMatmul._write_autotune_table(__class__.__name__ + "_2d_kernel", __class__._2d_kernel)
-        TritonMatmul._write_autotune_table(__class__.__name__ + "_4d_kernel", __class__._4d_kernel)
+        TritonMatmul._write_autotune_table(
+            f"{__class__.__name__}_2d_kernel", __class__._2d_kernel
+        )
+        TritonMatmul._write_autotune_table(
+            f"{__class__.__name__}_4d_kernel", __class__._4d_kernel
+        )
 
     @staticmethod
     def _update_autotune_table():
-        TritonMatmul._update_autotune_table(__class__.__name__ + "_2d_kernel", __class__._2d_kernel)
-        TritonMatmul._update_autotune_table(__class__.__name__ + "_4d_kernel", __class__._4d_kernel)
+        TritonMatmul._update_autotune_table(
+            f"{__class__.__name__}_2d_kernel", __class__._2d_kernel
+        )
+        TritonMatmul._update_autotune_table(
+            f"{__class__.__name__}_4d_kernel", __class__._4d_kernel
+        )
 
 
 # -----------------------------------------------------------------------------

@@ -167,10 +167,7 @@ def init_deepspeed_backend(ds_backend, timeout, init_method):
 
 def is_initialized():
     #assert cdb is not None, 'DeepSpeed backend not set, please initialize it using init_process_group()'
-    if cdb is None:
-        return False
-    else:
-        return cdb.is_initialized()
+    return False if cdb is None else cdb.is_initialized()
 
 
 def destroy_process_group(group=None):
@@ -261,19 +258,18 @@ def reduce_scatter_fn(output_tensor,
                                      async_op=async_op,
                                      prof=prof,
                                      debug=debug)
-    else:
-        if get_rank() == 0:
-            utils.logger.warning_once("unable to find torch.distributed.reduce_scatter_tensor. will fall back to "
-                                      "torch.distributed.reduce_scatter which will result in suboptimal performance. "
-                                      "please consider upgrading your pytorch installation.")
-        input_tensor_lst = list(torch.chunk(tensor, cdb.get_world_size(group)))
-        return reduce_scatter(output_tensor,
-                              input_tensor_lst,
-                              op=op,
-                              group=group,
-                              async_op=async_op,
-                              prof=prof,
-                              debug=debug)
+    if get_rank() == 0:
+        utils.logger.warning_once("unable to find torch.distributed.reduce_scatter_tensor. will fall back to "
+                                  "torch.distributed.reduce_scatter which will result in suboptimal performance. "
+                                  "please consider upgrading your pytorch installation.")
+    input_tensor_lst = list(torch.chunk(tensor, cdb.get_world_size(group)))
+    return reduce_scatter(output_tensor,
+                          input_tensor_lst,
+                          op=op,
+                          group=group,
+                          async_op=async_op,
+                          prof=prof,
+                          debug=debug)
 
 
 @timed_op
@@ -318,13 +314,12 @@ def allgather_fn(output_tensor, input_tensor, group=None, async_op=False, debug=
     ), 'DeepSpeed backend not set, please initialize it using init_process_group()'
     if cdb.has_all_gather_into_tensor():
         return all_gather_into_tensor(output_tensor, input_tensor, group=group, async_op=async_op, debug=debug)
-    else:
-        if get_rank() == 0:
-            utils.logger.warning_once("unable to find torch.distributed.all_gather_into_tensor. will fall back to "
-                                      "torch.distributed.all_gather which will result in suboptimal performance. "
-                                      "please consider upgrading your pytorch installation.")
-        output_tensors = list(torch.chunk(output_tensor, cdb.get_world_size(group)))
-        return all_gather(output_tensors, input_tensor, group=group, async_op=async_op, debug=debug)
+    if get_rank() == 0:
+        utils.logger.warning_once("unable to find torch.distributed.all_gather_into_tensor. will fall back to "
+                                  "torch.distributed.all_gather which will result in suboptimal performance. "
+                                  "please consider upgrading your pytorch installation.")
+    output_tensors = list(torch.chunk(output_tensor, cdb.get_world_size(group)))
+    return all_gather(output_tensors, input_tensor, group=group, async_op=async_op, debug=debug)
 
 
 @timed_op
@@ -665,7 +660,9 @@ def init_distributed(dist_backend=None,
             if dist_backend is None:
                 dist_backend = get_accelerator().communication_backend_name()
             if int(os.getenv('RANK', '0')) == 0:
-                utils.logger.info('Initializing TorchBackend in DeepSpeed with backend {}'.format(dist_backend))
+                utils.logger.info(
+                    f'Initializing TorchBackend in DeepSpeed with backend {dist_backend}'
+                )
             # Create a torch backend object, initialize torch distributed, and assign to cdb
             cdb = TorchBackend(dist_backend, timeout, init_method, rank, world_size)
 
@@ -690,7 +687,7 @@ def mpi_discovery(distributed_port=TORCH_DISTRIBUTED_DEFAULT_PORT, verbose=True)
     # Determine local rank by assuming hostnames are unique
     proc_name = MPI.Get_processor_name()
     all_procs = comm.allgather(proc_name)
-    local_rank = sum([i == proc_name for i in all_procs[:rank]])
+    local_rank = sum(i == proc_name for i in all_procs[:rank])
 
     os.environ['RANK'] = str(rank)
     os.environ['WORLD_SIZE'] = str(world_size)
@@ -700,14 +697,16 @@ def mpi_discovery(distributed_port=TORCH_DISTRIBUTED_DEFAULT_PORT, verbose=True)
 
     if verbose:
         utils.logger.info(
-            "Discovered MPI settings of world_rank={}, local_rank={}, world_size={}, master_addr={}, master_port={}".
-            format(os.environ['RANK'], os.environ['LOCAL_RANK'], os.environ['WORLD_SIZE'], os.environ['MASTER_ADDR'],
-                   os.environ['MASTER_PORT']))
+            f"Discovered MPI settings of world_rank={os.environ['RANK']}, local_rank={os.environ['LOCAL_RANK']}, world_size={os.environ['WORLD_SIZE']}, master_addr={os.environ['MASTER_ADDR']}, master_port={os.environ['MASTER_PORT']}"
+        )
 
     if cdb is not None and cdb.is_initialized():
-        assert cdb.get_rank() == rank, "MPI rank {} does not match torch rank {}".format(rank, cdb.get_rank())
-        assert cdb.get_world_size() == world_size, "MPI world size {} does not match torch world size {}".format(
-            world_size, cdb.get_world_size())
+        assert (
+            cdb.get_rank() == rank
+        ), f"MPI rank {rank} does not match torch rank {cdb.get_rank()}"
+        assert (
+            cdb.get_world_size() == world_size
+        ), f"MPI world size {world_size} does not match torch world size {cdb.get_world_size()}"
 
 
 def in_aml():
@@ -745,16 +744,17 @@ def patch_aml_env_for_torch_nccl_backend(master_port=6105, verbose=True):
         os.environ["MASTER_PORT"] = DEFAULT_AML_MASTER_PORT
 
     if verbose:
-        utils.logger.info("NCCL_SOCKET_IFNAME original value = {}".format(os.environ["NCCL_SOCKET_IFNAME"]))
+        utils.logger.info(
+            f'NCCL_SOCKET_IFNAME original value = {os.environ["NCCL_SOCKET_IFNAME"]}'
+        )
 
     os.environ["NCCL_SOCKET_IFNAME"] = DEFAULT_AML_NCCL_SOCKET_IFNAME
     os.environ['LOCAL_RANK'] = os.environ["OMPI_COMM_WORLD_LOCAL_RANK"]
 
     if verbose:
         utils.logger.info(
-            "Discovered AzureML settings of world_rank={}, local_rank={}, world_size={}, master_addr={}, master_port={}"
-            .format(os.environ['RANK'], os.environ['LOCAL_RANK'], os.environ['WORLD_SIZE'], os.environ['MASTER_ADDR'],
-                    os.environ['MASTER_PORT']))
+            f"Discovered AzureML settings of world_rank={os.environ['RANK']}, local_rank={os.environ['LOCAL_RANK']}, world_size={os.environ['WORLD_SIZE']}, master_addr={os.environ['MASTER_ADDR']}, master_port={os.environ['MASTER_PORT']}"
+        )
 
 
 def patch_aws_sm_env_for_torch_nccl_backend(verbose=True):
@@ -766,6 +766,5 @@ def patch_aws_sm_env_for_torch_nccl_backend(verbose=True):
 
     if verbose:
         utils.logger.info(
-            "Discovered AWS SageMaker settings of world_rank={}, local_rank={}, world_size={}, master_addr={}, master_port={}"
-            .format(os.environ['RANK'], os.environ['LOCAL_RANK'], os.environ['WORLD_SIZE'], os.environ['MASTER_ADDR'],
-                    os.environ['MASTER_PORT']))
+            f"Discovered AWS SageMaker settings of world_rank={os.environ['RANK']}, local_rank={os.environ['LOCAL_RANK']}, world_size={os.environ['WORLD_SIZE']}, master_addr={os.environ['MASTER_ADDR']}, master_port={os.environ['MASTER_PORT']}"
+        )

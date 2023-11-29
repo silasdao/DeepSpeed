@@ -353,8 +353,7 @@ def parse_inclusion_exclusion(resource_pool, inclusion, exclusion):
 
 def encode_world_info(world_info):
     world_info_json = json.dumps(world_info).encode('utf-8')
-    world_info_base64 = base64.urlsafe_b64encode(world_info_json).decode('utf-8')
-    return world_info_base64
+    return base64.urlsafe_b64encode(world_info_json).decode('utf-8')
 
 
 def run_autotuning(args, active_resources):
@@ -378,10 +377,10 @@ def parse_num_nodes(str_num_nodes: str, elastic_training: bool):
         min_nodes, max_nodes = int(node_list[0]), -1
     elif len(node_list) == 2 and elastic_training:
         min_nodes, max_nodes = int(node_list[0]), int(node_list[1])
-    elif len(node_list) == 2 and not elastic_training:
+    elif len(node_list) == 2:
         raise RuntimeError("MIN:MAX format is only supported in elastic training")
     else:
-        raise RuntimeError("num_nodes {} is not in MIN:MAX format".format(str_num_nodes))
+        raise RuntimeError(f"num_nodes {str_num_nodes} is not in MIN:MAX format")
 
     return min_nodes, max_nodes
 
@@ -458,7 +457,7 @@ def main(args=None):
         args.master_addr = result.decode('utf-8').split()[0]
         if not args.master_addr:
             raise RuntimeError(
-                f"Unable to detect suitable master address via `hostname -I`, please manually specify one via --master_addr"
+                "Unable to detect suitable master address via `hostname -I`, please manually specify one via --master_addr"
             )
         logger.info(f"Using IP address of {args.master_addr} for node {first_host}")
 
@@ -534,20 +533,20 @@ def main(args=None):
 
         curr_path = os.path.abspath('.')
         if 'PYTHONPATH' in env:
-            env['PYTHONPATH'] = curr_path + ":" + env['PYTHONPATH']
+            env['PYTHONPATH'] = f"{curr_path}:" + env['PYTHONPATH']
         else:
             env['PYTHONPATH'] = curr_path
 
         excluded_vars = []
         for exclude_key, var_list in EXCLUDE_ENVS.items():
-            if exclude_key in env.keys():
+            if exclude_key in env:
                 # key exists in launcher env -> var list should be used
                 excluded_vars += var_list
 
         exports = ""
-        for var in env.keys():
-            if any([var.startswith(name) for name in EXPORT_ENVS]):
-                if not any([var == name for name in excluded_vars]):
+        for var in env:
+            if any(var.startswith(name) for name in EXPORT_ENVS):
+                if all(var != name for name in excluded_vars):
                     runner.add_export(var, env[var])
 
         for environ_path in DEEPSPEED_ENVIRONMENT_PATHS:
@@ -558,7 +557,7 @@ def main(args=None):
             if os.path.isfile(environ_file):
                 logger.info(f"deepspeed_env file = {environ_file}")
                 with open(environ_file, 'r') as fd:
-                    for var in fd.readlines():
+                    for var in fd:
                         key, val = var.split('=', maxsplit=1)
                         runner.add_export(key, val)
 

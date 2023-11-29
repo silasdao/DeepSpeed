@@ -87,10 +87,10 @@ class DeepSpeedAutotuningConfig(DeepSpeedConfigObject):
 
 def get_model_info_config(param_dict):
     if MODEL_INFO in param_dict and param_dict[MODEL_INFO] is not None:
-        model_info_config = {}
-        for key, default_value in MODEL_INFO_KEY_DEFAULT_DICT.items():
-            model_info_config[key] = get_scalar_param(param_dict[MODEL_INFO], key, default_value)
-        return model_info_config
+        return {
+            key: get_scalar_param(param_dict[MODEL_INFO], key, default_value)
+            for key, default_value in MODEL_INFO_KEY_DEFAULT_DICT.items()
+        }
     return None
 
 

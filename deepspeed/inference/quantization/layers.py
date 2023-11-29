@@ -23,12 +23,12 @@ def get_quantized_weight_wrapper(model, pre_quant_weight: nn.Parameter, quantize
         if is_zero3_enabled:
             register_external_parameter(model, compat_tensor)
 
-        return quantized_weight_registry[id(pre_quant_weight)]
     else:
         quantized_weights, quant_scale, quant_min = quantize_weight_fn()
         quantized_weight_registry[id(pre_quant_weight)] = concat_to_compat_param(quantized_weights, quant_scale,
                                                                                  quant_min)
-        return quantized_weight_registry[id(pre_quant_weight)]
+
+    return quantized_weight_registry[id(pre_quant_weight)]
 
 
 def get_quantize_weight_fn(quantizer: Quantizer, pre_quant_weight: nn.Parameter) -> Callable:
@@ -86,7 +86,7 @@ class QuantizedEmbedding(nn.Embedding):
                                                  device=pre_quant_layer.weight.device,
                                                  dtype=pre_quant_layer.weight.dtype)
 
-        assert pre_quant_layer.max_norm == None, 'Not supported'
+        assert pre_quant_layer.max_norm is None, 'Not supported'
         assert pre_quant_layer.norm_type == 2, 'Not supported'
         assert pre_quant_layer.scale_grad_by_freq == False, 'Not supported'
         assert pre_quant_layer.sparse == False, 'Not supported'

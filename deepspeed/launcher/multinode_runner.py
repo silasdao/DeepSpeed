@@ -69,17 +69,14 @@ class PDSHRunner(MultiNodeRunner):
             environment["PDSH_SSH_ARGS_APPEND"] += f" -p {self.args.ssh_port}"
 
         active_workers = ",".join(active_resources.keys())
-        logger.info("Running on the following workers: %s" % active_workers)
+        logger.info(f"Running on the following workers: {active_workers}")
 
         # PDSH flags for max node fan out and specific hosts to launch on
         # See https://linux.die.net/man/1/pdsh for flag details
         pdsh_cmd_args = ['pdsh', '-S', '-f', str(PDSH_MAX_FAN_OUT), '-w', active_workers] + split(
             self.args.launcher_args)
 
-        exports = ""
-        for key, val in self.exports.items():
-            exports += "export {}={}; ".format(key, val)
-
+        exports = "".join(f"export {key}={val}; " for key, val in self.exports.items())
         # https://linux.die.net/man/1/pdsh
         # %n will be replaced by pdsh command
         deepspeed_launch = [
@@ -96,10 +93,13 @@ class PDSHRunner(MultiNodeRunner):
         if self.args.save_pid:
             deepspeed_launch += ["--save_pid", f"{os.getpid()}"]
         if self.args.elastic_training:
-            deepspeed_launch.append("--enable_elastic_training")
-            deepspeed_launch.append(f"--max_elastic_nodes={self.args.max_elastic_nodes}")
-            deepspeed_launch.append(f"--min_elastic_nodes={self.args.min_elastic_nodes}")
-
+            deepspeed_launch.extend(
+                (
+                    "--enable_elastic_training",
+                    f"--max_elastic_nodes={self.args.max_elastic_nodes}",
+                    f"--min_elastic_nodes={self.args.min_elastic_nodes}",
+                )
+            )
         cmd_to_search = [i + "\\" for i in deepspeed_launch[2:6]]
 
         kill_command = pdsh_cmd_args + ["pkill -f ", " ".join(cmd_to_search)[:-2]]
@@ -148,7 +148,7 @@ class OpenMPIRunner(MultiNodeRunner):
 
         export_cmd = []
         for k, v in self.exports.items():
-            export_cmd += ['-x', "{}={}".format(k, v)]
+            export_cmd += ['-x', f"{k}={v}"]
 
         python_exec = []
         if not self.args.no_python:
@@ -186,7 +186,7 @@ class MPICHRunner(MultiNodeRunner):
         devices_per_node = self.resource_pool.values()
         total_process_count = sum(devices_per_node)
         process_per_node = list(devices_per_node)[0]
-        if not all([n == process_per_node for n in devices_per_node]):
+        if any(n != process_per_node for n in devices_per_node):
             raise ValueError("MPICH requires same number of devices per node")
 
         mpirun_cmd = [
@@ -195,7 +195,7 @@ class MPICHRunner(MultiNodeRunner):
         export_cmd = []
 
         for k, v in self.exports.items():
-            export_cmd += ['-genv', "{}={}".format(k, v)]
+            export_cmd += ['-genv', f"{k}={v}"]
 
         export_cmd += ['-genv', 'MASTER_ADDR', str(self.args.master_addr)]
         export_cmd += ['-genv', 'MASTER_PORT', str(self.args.master_port)]
@@ -257,7 +257,7 @@ class IMPIRunner(MultiNodeRunner):
         devices_per_node = self.resource_pool.values()
         total_process_count = sum(devices_per_node)
         process_per_node = list(devices_per_node)[0]
-        if not all([n == process_per_node for n in devices_per_node]):
+        if any(n != process_per_node for n in devices_per_node):
             raise ValueError("Intel MPI requires same number of devices per node")
 
         mpirun_cmd = [
@@ -359,8 +359,13 @@ class SlurmRunner(MultiNodeRunner):
             exports += f",{key}={val}"
 
         python_exec = [sys.executable, "-u"]
-        command = srun_cmd + [exports] + python_exec + [self.user_script] + self.user_arguments
-        return command
+        return (
+            srun_cmd
+            + [exports]
+            + python_exec
+            + [self.user_script]
+            + self.user_arguments
+        )
 
 
 class MVAPICHRunner(MultiNodeRunner):
@@ -420,7 +425,7 @@ class MVAPICHRunner(MultiNodeRunner):
         devices_per_node = self.resource_pool.values()
         total_process_count = sum(devices_per_node)
         process_per_node = list(devices_per_node)[0]
-        if not all([n == process_per_node for n in devices_per_node]):
+        if any(n != process_per_node for n in devices_per_node):
             raise ValueError("mvapich requires same number of devices per node")
 
         with open(MVAPICH_TMP_HOSTFILE, 'w') as fd:
@@ -439,7 +444,7 @@ class MVAPICHRunner(MultiNodeRunner):
 
         export_cmd = []
         for k, v in self.exports.items():
-            export_cmd += ['-env', "{}={}".format(k, v)]
+            export_cmd += ['-env', f"{k}={v}"]
 
         python_exec = []
         if not self.args.no_python:

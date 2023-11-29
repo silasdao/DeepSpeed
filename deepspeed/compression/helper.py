@@ -63,22 +63,18 @@ def module_replacement(model, module_name, compression_technique=None, mpu=None)
     # Get the old module
     old_module = recursive_getattr(model, module_name)
 
-    need_bias = False
-    if hasattr(old_module, 'bias') and old_module.bias is not None:
-        need_bias = True
-
+    need_bias = bool(hasattr(old_module, 'bias') and old_module.bias is not None)
     # Initialize the new module
-    if isinstance(old_module, LinearLayer_Compress) or isinstance(old_module, torch.nn.Linear):
-        if isinstance(old_module, LinearLayer_Compress):
-            new_module = old_module
-        else:
-            new_module = LinearLayer_Compress(old_module.in_features, old_module.out_features,
-                                              bias=need_bias).to(device=old_module.weight.device,
-                                                                 dtype=old_module.weight.dtype)
-            new_module.weight.data = old_module.weight.data
-            if need_bias:
-                new_module.bias.data = old_module.bias.data
-    elif isinstance(old_module, Conv2dLayer_Compress) or isinstance(old_module, torch.nn.Conv2d):
+    if isinstance(old_module, LinearLayer_Compress):
+        new_module = old_module
+    elif isinstance(old_module, torch.nn.Linear):
+        new_module = LinearLayer_Compress(old_module.in_features, old_module.out_features,
+                                          bias=need_bias).to(device=old_module.weight.device,
+                                                             dtype=old_module.weight.dtype)
+        new_module.weight.data = old_module.weight.data
+        if need_bias:
+            new_module.bias.data = old_module.bias.data
+    elif isinstance(old_module, (Conv2dLayer_Compress, torch.nn.Conv2d)):
         if isinstance(old_module, Conv2dLayer_Compress):
             new_module = old_module
         else:
@@ -97,15 +93,19 @@ def module_replacement(model, module_name, compression_technique=None, mpu=None)
             new_module.bias.data = old_module.bias.data
         new_module.running_mean.data = old_module.running_mean.data
         new_module.running_var.data = old_module.running_var.data
-    elif isinstance(old_module, Embedding_Compress) or isinstance(old_module, torch.nn.Embedding):
+    elif isinstance(old_module, (Embedding_Compress, torch.nn.Embedding)):
         if isinstance(old_module, Embedding_Compress):
             new_module = old_module
         else:
             new_module = Embedding_Compress(old_module.num_embeddings, old_module.embedding_dim, old_module.padding_idx, old_module.max_norm, old_module.norm_type, \
                                         old_module.scale_grad_by_freq, old_module.sparse).to(device=old_module.weight.device, dtype=old_module.weight.dtype)
             new_module.weight.data = old_module.weight.data
-    elif mpu is not None and (isinstance(old_module, ColumnParallelLinear_Compress)
-                              or isinstance(old_module, mpu.ColumnParallelLinear)):
+    elif mpu is not None and (
+        isinstance(
+            old_module,
+            (ColumnParallelLinear_Compress, mpu.ColumnParallelLinear),
+        )
+    ):
         if isinstance(old_module, ColumnParallelLinear_Compress):
             new_module = old_module
         else:
@@ -119,8 +119,11 @@ def module_replacement(model, module_name, compression_technique=None, mpu=None)
             new_module.weight.data = old_module.weight.data
             if need_bias:
                 new_module.bias.data = old_module.bias.data
-    elif mpu is not None and (isinstance(old_module, RowParallelLinear_Compress)
-                              or isinstance(old_module, mpu.RowParallelLinear)):
+    elif mpu is not None and (
+        isinstance(
+            old_module, (RowParallelLinear_Compress, mpu.RowParallelLinear)
+        )
+    ):
         if isinstance(old_module, RowParallelLinear_Compress):
             new_module = old_module
         else:
@@ -164,20 +167,27 @@ def module_replacement(model, module_name, compression_technique=None, mpu=None)
                 if v[CHANNEL_PRUNING_ENABLED]:
                     new_module.enable_channel_pruning(v[CHANNEL_PRUNING_DENSE_RATIO], v[CHANNEL_PRUNING_METHOD])
             else:
-                raise NotImplementedError('Compression technique {} is not implemented'.format(k))
+                raise NotImplementedError(f'Compression technique {k} is not implemented')
 
     # Replace the old module with the new one
     recursive_setattr(model, module_name, new_module)
 
 
 def is_module_compressible(module, mpu=None):
-    ret = isinstance(module, torch.nn.Linear) or \
-          isinstance(module, torch.nn.Conv2d) or \
-          isinstance(module, torch.nn.Embedding) or \
-          isinstance(module, torch.nn.BatchNorm2d)
+    ret = isinstance(
+        module,
+        (
+            torch.nn.Linear,
+            torch.nn.Conv2d,
+            torch.nn.Embedding,
+            torch.nn.BatchNorm2d,
+        ),
+    )
 
     if mpu is not None:
-        ret = ret or isinstance(module, mpu.RowParallelLinear) or isinstance(module, mpu.ColumnParallelLinear)
+        ret = ret or isinstance(
+            module, (mpu.RowParallelLinear, mpu.ColumnParallelLinear)
+        )
 
     return ret
 
@@ -234,17 +244,15 @@ def convert_conv1d_to_linear(model, convert_type):
     '''
     This is a help function to convert conv1d to linear (e.g., convert GPT2 from HF)
     '''
-    if hasattr(model, 'module'):
-        c_model = model.module
-    else:
-        c_model = model
-
+    c_model = model.module if hasattr(model, 'module') else model
     for name, module in c_model.named_modules():
         if isinstance(module, convert_type):
             old_module = recursive_getattr(c_model, name)
-            new_module = torch.nn.Linear(old_module.weight.data.size(0),
-                                         old_module.weight.data.size(1),
-                                         bias=True if old_module.bias is not None else False)
+            new_module = torch.nn.Linear(
+                old_module.weight.data.size(0),
+                old_module.weight.data.size(1),
+                bias=old_module.bias is not None,
+            )
             new_module.weight.data = old_module.weight.data.t().contiguous()
             if new_module.bias is not None:
                 new_module.bias.data = old_module.bias.data.view(-1)
@@ -274,7 +282,7 @@ def generate_pruners(config, model):
             logger.warning("one pruner hooks no layers, please have a check")
 
         pruners.append(get_pruner(info, modules))
-        info['modules'] = [key for key in modules.keys()]
+        info['modules'] = list(modules.keys())
         info['len_of_modules'] = len(info['modules'])
         logger.info(info)
     return pruners
@@ -307,10 +315,7 @@ def rewrite_optimizer_step(opt: torch.optim.Optimizer):
             for pruner in self.pruners:
                 pruner.on_before_optimizer_step()
 
-        if closure is not None:
-            res = self.orig_step(closure)
-        else:
-            res = self.orig_step()
+        res = self.orig_step(closure) if closure is not None else self.orig_step()
         if hasattr(self, "pruners"):
             for pruner in self.pruners:
                 pruner.on_after_optimizer_step()

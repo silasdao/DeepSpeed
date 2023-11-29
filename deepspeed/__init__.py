@@ -120,9 +120,10 @@ def initialize(args=None,
         * ``lr_scheduler``: Wrapped lr scheduler if user ``lr_scheduler`` is passed, or
           if ``lr_scheduler`` specified in JSON configuration. Otherwise ``None``.
     """
-    log_dist("DeepSpeed info: version={}, git-hash={}, git-branch={}".format(__version__, __git_hash__,
-                                                                             __git_branch__),
-             ranks=[0])
+    log_dist(
+        f"DeepSpeed info: version={__version__}, git-hash={__git_hash__}, git-branch={__git_branch__}",
+        ranks=[0],
+    )
 
     # Disable zero.Init context if it's currently enabled
     zero.partition_parameters.shutdown_init_context()
@@ -314,9 +315,10 @@ def init_inference(model, config=None, **kwargs):
     Returns:
         A deepspeed.InferenceEngine wrapped model.
     """
-    log_dist("DeepSpeed info: version={}, git-hash={}, git-branch={}".format(__version__, __git_hash__,
-                                                                             __git_branch__),
-             ranks=[0])
+    log_dist(
+        f"DeepSpeed info: version={__version__}, git-hash={__git_hash__}, git-branch={__git_branch__}",
+        ranks=[0],
+    )
 
     # Load config_dict from config first
     if config is None:
@@ -339,6 +341,4 @@ def init_inference(model, config=None, **kwargs):
 
     ds_inference_config = DeepSpeedInferenceConfig(**config_dict)
 
-    engine = InferenceEngine(model, config=ds_inference_config)
-
-    return engine
+    return InferenceEngine(model, config=ds_inference_config)

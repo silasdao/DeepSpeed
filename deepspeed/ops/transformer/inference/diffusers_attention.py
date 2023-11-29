@@ -186,11 +186,23 @@ class DeepSpeedDiffusersAttention(nn.Module):
                                     input.size()[1],
                                     input.size()[0], DeepSpeedDiffusersAttention.layer_id, self.config.mp_size, False,
                                     0, self.config.max_out_tokens, self.config.min_out_tokens)
-        output = DeepSpeedDiffusersAttentionFunction.apply(input, context, input_mask, self.config, self.attn_qkvw,
-                                                           self.attn_qw, self.attn_kw, self.attn_vw, self.attn_qkvb,
-                                                           self.num_attention_heads_per_partition, self.norm_factor,
-                                                           self.hidden_size_per_partition, self.attn_ow, self.attn_ob,
-                                                           self.do_out_bias, self.score_context_func, self.linear_func,
-                                                           self.triton_flash_attn_kernel)
-
-        return output
+        return DeepSpeedDiffusersAttentionFunction.apply(
+            input,
+            context,
+            input_mask,
+            self.config,
+            self.attn_qkvw,
+            self.attn_qw,
+            self.attn_kw,
+            self.attn_vw,
+            self.attn_qkvb,
+            self.num_attention_heads_per_partition,
+            self.norm_factor,
+            self.hidden_size_per_partition,
+            self.attn_ow,
+            self.attn_ob,
+            self.do_out_bias,
+            self.score_context_func,
+            self.linear_func,
+            self.triton_flash_attn_kernel,
+        )

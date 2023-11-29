@@ -121,18 +121,19 @@ except ImportError:
 def split_half_float_double_sparse(tensors):
     device_type = get_accelerator().device_name()
     supported_types = [
-        "torch.{}.HalfTensor".format(device_type), "torch.{}.FloatTensor".format(device_type),
-        "torch.{}.DoubleTensor".format(device_type), "torch.{}.BFloat16Tensor".format(device_type),
-        SparseTensor.type()
+        f"torch.{device_type}.HalfTensor",
+        f"torch.{device_type}.FloatTensor",
+        f"torch.{device_type}.DoubleTensor",
+        f"torch.{device_type}.BFloat16Tensor",
+        SparseTensor.type(),
     ]
 
     for t in tensors:
         assert t.type() in supported_types, f"attempting to reduce an unsupported grad type: {t.type()}"
 
     buckets = []
-    for i, dtype in enumerate(supported_types):
-        bucket = [t for t in tensors if t.type() == dtype]
-        if bucket:
+    for dtype in supported_types:
+        if bucket := [t for t in tensors if t.type() == dtype]:
             buckets.append((dtype, bucket))
     return buckets
 

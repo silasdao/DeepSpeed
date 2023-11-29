@@ -83,14 +83,14 @@ class DeepSpeedCheckpoint(object):
         return self.dp_degree != self.zero_checkpoint.get_src_dp_degree()
 
     def show_2d_mapping(self):
-        print(f'reshaped 2d map ---- begin')
+        print('reshaped 2d map ---- begin')
 
         for i in range(self.pp_degree):
             for j in range(self.tp_degree):
                 file_list = self.get_2d_parallel_files(pp_index=i, tp_index=j)
                 print(f'[{i}, {j}] = {file_list}')
 
-        print(f'reshaped 2d map ---- end')
+        print('reshaped 2d map ---- end')
 
     def show_tp_embedding_map(self):
         self._dump_mapping(self.tp_to_embedding_map, 'tp_to_embedding_layers')
@@ -125,7 +125,7 @@ class DeepSpeedCheckpoint(object):
         return self.layer_keys[FINAL_LAYER_NORM_INDEX]
 
     def get_iteration(self):
-        if not ITERATION_KEY in self.global_state:
+        if ITERATION_KEY not in self.global_state:
             sd = torch.load(self.mp_rank_files[0], map_location=torch.device('cpu'))
             self.global_state[ITERATION_KEY] = sd.get(ITERATION_KEY, 0)
 
@@ -134,15 +134,14 @@ class DeepSpeedCheckpoint(object):
     def get_embedding_state(self, tp_index: int) -> Dict:
         assert tp_index in self.tp_to_embedding_map.keys()
         sd_list = [torch.load(fname, map_location=torch.device('cpu')) for fname in self.tp_to_embedding_map[tp_index]]
-        sd = self._merge_state_dicts(sd_list)
-        return sd
+        return self._merge_state_dicts(sd_list)
 
     def get_embedding_files(self, tp_index: int) -> list:
         assert tp_index in self.tp_to_embedding_map.keys()
         return self.tp_to_embedding_map[tp_index]
 
     def _get_checkpoint_value(self, key):
-        if not key in self.global_state:
+        if key not in self.global_state:
             sd = torch.load(self.mp_rank_files[0], map_location=torch.device('cpu'))
             self.global_state[key] = sd.get(key, None)
 
@@ -162,11 +161,7 @@ class DeepSpeedCheckpoint(object):
 
         merged_sd = None
         for sd in sd_list:
-            if merged_sd is None:
-                merged_sd = sd
-            else:
-                merged_sd = merge_state(merged_sd, sd)
-
+            merged_sd = sd if merged_sd is None else merge_state(merged_sd, sd)
         return merged_sd
 
     def get_transformer_state(self, tp_index: int, pp_index: int) -> list:
@@ -185,8 +180,10 @@ class DeepSpeedCheckpoint(object):
 
     def get_final_norm_state(self, tp_index: int) -> Dict:
         assert tp_index in self.tp_to_final_norm_map.keys()
-        sd = torch.load(self.tp_to_final_norm_map[tp_index][0], map_location=torch.device('cpu'))
-        return sd
+        return torch.load(
+            self.tp_to_final_norm_map[tp_index][0],
+            map_location=torch.device('cpu'),
+        )
 
     def get_final_norm_files(self, tp_index: int) -> list:
         assert tp_index in self.tp_to_final_norm_map.keys()
@@ -196,8 +193,7 @@ class DeepSpeedCheckpoint(object):
         assert layer_index < len(self.layer_files)
         layer_files = get_files_with_prefix(self.layer_files, self.layer_keys[layer_index])
         layer_file_partitions = partition_data(layer_files, self.tp_degree)
-        data_map = {i: flist for i, flist in enumerate(layer_file_partitions)}
-        return data_map
+        return dict(enumerate(layer_file_partitions))
 
     def get_2d_parallel_files(self, tp_index: int, pp_index: int) -> list:
         assert tp_index < self.tp_degree
@@ -209,8 +205,10 @@ class DeepSpeedCheckpoint(object):
         data_map = {}
         transformer_layers = self.layer_keys[1:-1]
         layers_per_pp = len(transformer_layers) // self.pp_degree
-        data_map = {i: transformer_layers[i * layers_per_pp:(i + 1) * layers_per_pp] for i in range(0, self.pp_degree)}
-        return data_map
+        return {
+            i: transformer_layers[i * layers_per_pp : (i + 1) * layers_per_pp]
+            for i in range(0, self.pp_degree)
+        }
 
     def _dump_mapping(self, data_map, map_tag=None):
         if map_tag is not None:
@@ -232,7 +230,7 @@ class DeepSpeedCheckpoint(object):
             layer_file_partitions = partition_data(layer_files, self.tp_degree)
             for tp_index in range(self.tp_degree):
                 map_key = (tp_index, pp_index)
-                if not map_key in file_map.keys():
+                if map_key not in file_map:
                     file_map[map_key] = []
                 file_map[map_key].append(layer_file_partitions[tp_index])
 
@@ -262,7 +260,7 @@ class DeepSpeedCheckpoint(object):
     def _merge_state_dicts(self, sd_list):
         merged_sd = {}
         for key in sd_list[0].keys():
-            if not key in SEQUENTIAL_LAYERS:
+            if key not in SEQUENTIAL_LAYERS:
                 cat_dim = LAYER_CONCAT_DIM.get(key, 0)
                 merged_sd[key] = torch.cat([sd[key] for sd in sd_list], dim=cat_dim)
             else:

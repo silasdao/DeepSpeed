@@ -52,8 +52,8 @@ class TopKBinarizer(autograd.Function):
 
     @staticmethod
     def backward(ctx, gradOutput):
-        mask, = ctx.saved_tensors
         if ctx.sigmoid:
+            mask, = ctx.saved_tensors
             return gradOutput.clone(), ((gradOutput * mask).sum()).view(-1), None
         else:
             return gradOutput.clone(), None, None

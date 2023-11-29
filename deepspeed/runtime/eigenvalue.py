@@ -51,7 +51,7 @@ class Eigenvalue(object):
         return normalized_vectors
 
     def inner_product(self, xs, ys):
-        return sum([torch.sum(x * y) for (x, y) in zip(xs, ys)])
+        return sum(torch.sum(x * y) for (x, y) in zip(xs, ys))
 
     def get_layers(self, module):
         scope_names = self.layer_name.split('.')
@@ -102,8 +102,12 @@ class Eigenvalue(object):
 
             # Disable eigenvalue if the model doesn't support second order gradients computation,
             # e.g. when enabling DS transformer kernel.
-            if len(grads) == 0 or len(params) == 0:
-                log_dist(f'The model does NOT support eigenvalue computation.', ranks=[0], level=logging.WARNING)
+            if not grads or not params:
+                log_dist(
+                    'The model does NOT support eigenvalue computation.',
+                    ranks=[0],
+                    level=logging.WARNING,
+                )
                 return []
 
             i = 0

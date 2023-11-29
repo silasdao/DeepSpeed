@@ -80,13 +80,11 @@ class HybridGatedMLPContainer(HybridEngineContainer):
         if self.inter_up_b is not None:
             inter_data.extend([self.inter_up_b.data, self.inter_gate_b.data])
 
-        self.inter_up_w.data = self._h4h_w.data[:self.inter_up_w.shape[0]]
-        self.inter_gate_w.data = self._h4h_w.data[self.inter_up_w.shape[0]:]
-
-        if self.inter_up_b is not None:
             self.inter_up_b.data = self._h4h_b.data[:self.inter_up_b.shape[0]]
             self.inter_gate_b.data = self._h4h_b.data[self.inter_up_b.shape[0]:]
 
+        self.inter_up_w.data = self._h4h_w.data[:self.inter_up_w.shape[0]]
+        self.inter_gate_w.data = self._h4h_w.data[self.inter_up_w.shape[0]:]
         for data in inter_data:
             del data
 

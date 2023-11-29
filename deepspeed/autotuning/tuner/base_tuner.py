@@ -23,10 +23,7 @@ class BaseTuner:
 
     def has_next(self):
         """Whether there exists more configurations for evaluation"""
-        if len(self.all_exps) > 0:
-            return True
-        else:
-            return False
+        return len(self.all_exps) > 0
 
     def next_batch(self, sample_size):
         """Select the next batch of configurations for evaluation"""

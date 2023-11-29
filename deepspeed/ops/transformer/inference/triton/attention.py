@@ -103,7 +103,7 @@ class TritonSelfAttention(nn.Module):
 
         # triton autotune table update for score/context matmul
         if triton_autotune:
-            print(f"running triton autotune for regular attention kernel")
+            print("running triton autotune for regular attention kernel")
             __class__._triton_autotune(2, self.config.max_out_tokens, self.head_size, self.config.hidden_size,
                                        self.triangular_masking, self.scale)
 
@@ -233,10 +233,7 @@ def _triton_attention(qkv,
                                       add_mask=(not triangular and input_mask is not None))
     else:
         output = score_4d_matmul(qkv, head_size, triangular, scale)
-        if triangular:
-            output = softmax(output)
-        else:
-            output = softmax(output, input_mask)
+        output = softmax(output) if triangular else softmax(output, input_mask)
         output = context_4d_matmul(output, qkv, head_size)
 
     return output

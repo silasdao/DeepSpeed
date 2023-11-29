@@ -21,9 +21,7 @@ def has_moe_layers(m):
 
 
 def is_moe_param(param: torch.Tensor) -> bool:
-    if hasattr(param, "allreduce") and not param.allreduce:
-        return True
-    return False
+    return bool(hasattr(param, "allreduce") and not param.allreduce)
 
 
 def split_params_into_shared_and_expert_params(
@@ -93,15 +91,14 @@ def split_params_into_different_moe_groups_for_optimizer(param_groups: Tuple[Dic
     for param_group in param_groups:
         group_moe[param_group['name']] = {}
         for key in data_parallel_group_names:
-            group_moe[param_group['name']][key] = {}
-            group_moe[param_group['name']][key]['name'] = key
-            group_moe[param_group['name']][key]['moe'] = True
+            group_moe[param_group['name']][key] = {'name': key, 'moe': True}
             for ori_key in param_group.keys():
-                if ori_key != 'name':
-                    if ori_key == 'params':
-                        group_moe[param_group['name']][key][ori_key] = []
-                    else:
-                        group_moe[param_group['name']][key][ori_key] = param_group[ori_key]
+                if ori_key == 'name':
+                    pass
+                elif ori_key == 'params':
+                    group_moe[param_group['name']][key][ori_key] = []
+                else:
+                    group_moe[param_group['name']][key][ori_key] = param_group[ori_key]
     # Assign param
     for param_group in param_groups:
         new_params = []
@@ -115,7 +112,7 @@ def split_params_into_different_moe_groups_for_optimizer(param_groups: Tuple[Dic
 
     # Flatten the moe groups
     if max_group_size is not None:
-        for k, v in group_moe.items():
+        for v in group_moe.values():
             for k1, v1 in v.items():
                 cur_group = []
                 all_groups = []
@@ -131,14 +128,11 @@ def split_params_into_different_moe_groups_for_optimizer(param_groups: Tuple[Dic
                 if cur_group:
                     all_groups.append(cur_group)
                 for group in all_groups:
-                    new_dict = {}
-                    for key, val in v1.items():
-                        if key != 'params':
-                            new_dict[key] = val
+                    new_dict = {key: val for key, val in v1.items() if key != 'params'}
                     new_dict['params'] = group
                     param_groups.append(new_dict)
     else:
-        for k, v in group_moe.items():
+        for v in group_moe.values():
             for k1, v1 in v.items():
                 param_groups.append(v1)
 

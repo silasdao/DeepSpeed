@@ -19,23 +19,17 @@ DS_COMM_REDUCE_OFF = False
 
 def is_torch_ver_eq_2_0():
     TORCH_MAJOR, TORCH_MINOR = map(int, torch.__version__.split('.')[:2])
-    if TORCH_MAJOR == 2 and TORCH_MINOR == 0:
-        return True
-    return False
+    return TORCH_MAJOR == 2 and TORCH_MINOR == 0
 
 
 def is_torch_ver_ge_2_1():
     TORCH_MAJOR, TORCH_MINOR = map(int, torch.__version__.split('.')[:2])
-    if TORCH_MAJOR >= 2 and TORCH_MINOR >= 1:
-        return True
-    return False
+    return TORCH_MAJOR >= 2 and TORCH_MINOR >= 1
 
 
 def torch_ver_ge_1_13():
     TORCH_MAJOR, TORCH_MINOR = map(int, torch.__version__.split('.')[:2])
-    if TORCH_MAJOR >= 1 and TORCH_MINOR >= 13:
-        return True
-    return False
+    return TORCH_MAJOR >= 1 and TORCH_MINOR >= 13
 
 
 def has_coalescing_manager():
@@ -120,7 +114,7 @@ class TorchBackend(Backend):
         self.init_process_group(backend, timeout, init_method, rank, world_size)
 
     @classmethod
-    def get_all_gather_function(self):
+    def get_all_gather_function(cls):
         if hasattr(torch.distributed, "all_gather_into_tensor"):
             return torch.distributed.all_gather_into_tensor
         elif hasattr(torch.distributed, "_all_gather_base"):
@@ -128,7 +122,7 @@ class TorchBackend(Backend):
         return None
 
     @classmethod
-    def get_reduce_scatter_function(self):
+    def get_reduce_scatter_function(cls):
         if hasattr(torch.distributed, "reduce_scatter_tensor"):
             return torch.distributed.reduce_scatter_tensor
         elif hasattr(torch.distributed, "_reduce_scatter_base"):
@@ -176,32 +170,29 @@ class TorchBackend(Backend):
         return torch.distributed.reduce(tensor=tensor, dst=dst, op=self._reduce_op(op), group=group, async_op=async_op)
 
     def reduce_scatter(self, output, input_list, op=ReduceOp.SUM, group=None, async_op=False):
-        if DS_COMM_REDUCE_SCATTER_OFF:
-            if int(os.getenv('RANK', '0')) == 0:
-                utils.logger.warning("REDUCE SCATTER  is OFF")
-            return Noop()
-        else:
+        if not DS_COMM_REDUCE_SCATTER_OFF:
             return torch.distributed.reduce_scatter(output=output,
                                                     input_list=input_list,
                                                     op=self._reduce_op(op),
                                                     group=group,
                                                     async_op=async_op)
+        if int(os.getenv('RANK', '0')) == 0:
+            utils.logger.warning("REDUCE SCATTER  is OFF")
+        return Noop()
 
     def broadcast(self, tensor, src, group=None, async_op=False):
-        if DS_COMM_BROADCAST_OFF:
-            if int(os.getenv('RANK', '0')) == 0:
-                utils.logger.warning("BROADCAST  is OFF")
-            return Noop()
-        else:
+        if not DS_COMM_BROADCAST_OFF:
             return torch.distributed.broadcast(tensor=tensor, src=src, group=group, async_op=async_op)
+        if int(os.getenv('RANK', '0')) == 0:
+            utils.logger.warning("BROADCAST  is OFF")
+        return Noop()
 
     def all_gather(self, tensor_list, tensor, group=None, async_op=False):
-        if DS_COMM_ALL_GATHER_OFF:
-            if int(os.getenv('RANK', '0')) == 0:
-                utils.logger.warning("All Gather is OFF")
-            return Noop()
-        else:
+        if not DS_COMM_ALL_GATHER_OFF:
             return torch.distributed.all_gather(tensor_list=tensor_list, tensor=tensor, group=group, async_op=async_op)
+        if int(os.getenv('RANK', '0')) == 0:
+            utils.logger.warning("All Gather is OFF")
+        return Noop()
 
     def all_gather_into_tensor(self, output_tensor, input_tensor, group=None, async_op=False):
         if self.has_all_gather_into_tensor():
@@ -225,7 +216,6 @@ class TorchBackend(Backend):
                 utils.logger.warning("unable to find torch.distributed._all_gather_base. will fall back to "
                                      "torch.distributed.reduce_scatter which will result in suboptimal performance. "
                                      "please consider upgrading your pytorch installation.")
-                pass
 
     def all_gather_coalesced(self, output_tensors, input_tensors, group=None, async_op=False):
         """"""
@@ -261,7 +251,6 @@ class TorchBackend(Backend):
             utils.logger.warning("unable to find torch.distributed.reduce_scatter_tensor. will fall back to "
                                  "torch.distributed.reduce_scatter which will result in suboptimal performance. "
                                  "please consider upgrading your pytorch installation.")
-            pass
 
     def all_to_all_single(self,
                           output,
