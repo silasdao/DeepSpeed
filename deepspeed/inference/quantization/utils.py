@@ -44,13 +44,15 @@ class Quantizer:
 
     def __init__(self, config: Dict) -> None:
         self.config = config
-        assert self.config['num_bits'] == 4 or self.config[
-            'num_bits'] == 8, 'Only INT4 and INT8 quantization is supported.'
+        assert self.config['num_bits'] in [
+            4,
+            8,
+        ], 'Only INT4 and INT8 quantization is supported.'
         assert self.config['symmetric'] == False, 'Only asymmetric quantization is supported at this moment.'
 
     def quantize(self, tensor: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         assert tensor.shape[self.config['group_dim']] % self.config['group_size'] == 0 \
-            , f'Tensor shape: {tensor.shape} quantization config {self.config}'
+                , f'Tensor shape: {tensor.shape} quantization config {self.config}'
 
         tensor = torch.clone(tensor)
 
@@ -68,7 +70,7 @@ class Quantizer:
         if self.config['num_bits'] == 8:
             return quantized_tensor, scale, min_value
 
-        assert False, 'Unsupported quantization bits {}'.format(self.config['num_bits'])
+        assert False, f"Unsupported quantization bits {self.config['num_bits']}"
 
     def _quantize_int8(self, tensor: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         q_range = 2**self.config['num_bits'] - 1
@@ -98,16 +100,21 @@ class DeQuantizer:
     def __init__(self, config: Dict, dtype: torch.dtype) -> None:
         self.config = config
         self.dtype = dtype
-        assert self.config['num_bits'] == 4 or self.config[
-            'num_bits'] == 8, 'Only INT4 and INT8 quantization is supported.'
+        assert self.config['num_bits'] in [
+            4,
+            8,
+        ], 'Only INT4 and INT8 quantization is supported.'
         assert self.config['symmetric'] == False, 'Only asymmetric quantization is supported at this moment.'
 
     def dequantize(self, tensor: Tensor, quant_scale: Tensor, quant_min: Tensor) -> Tensor:
         # Use customized CUDA quantization kernel if possible.
-        if self.config['group_size'] % 8 == 0 and \
-                (self.config['num_bits'] == 4 or self.config['num_bits'] == 8) and \
-                self.config['group_dim'] == len(tensor.shape) - 1 and \
-                    self.dtype == torch.float16 and device == 'cuda':
+        if (
+            self.config['group_size'] % 8 == 0
+            and self.config['num_bits'] in [4, 8]
+            and self.config['group_dim'] == len(tensor.shape) - 1
+            and self.dtype == torch.float16
+            and device == 'cuda'
+        ):
 
             last_dimension_size = self.config['group_size']
             if self.config['num_bits'] == 4:
@@ -117,7 +124,7 @@ class DeQuantizer:
                     tensor.numel() // last_dimension_size, self.config['group_size'])
                 shape = list(tensor.shape)
                 shape[-1] = shape[-1] * 2
-            elif self.config['num_bits'] == 8:
+            else:
                 # last_dimension_size = last_dimension_size // 2
                 quantized_tensor = get_quantizer_cuda_module().dequantize_int8_to_half_experimental(
                     tensor.reshape(-1, last_dimension_size), quant_scale, quant_min,
@@ -129,7 +136,7 @@ class DeQuantizer:
         if self.config['num_bits'] == 4:
             tensor = self._decompress_uint4_to_uint8(tensor)
         elif self.config['num_bits'] != 8:
-            assert False, 'Unsupported quantization bits {}'.format(self.config['num_bits'])
+            assert False, f"Unsupported quantization bits {self.config['num_bits']}"
 
         shape = tensor.shape
         num_groups = shape[self.config['group_dim']] // self.config['group_size']
@@ -137,8 +144,7 @@ class DeQuantizer:
                      shape[self.config['group_dim'] + 1:])
         tensor = tensor.view(new_shape)
 
-        dequantized_tensor = self._dequantize_int8(tensor, quant_scale, quant_min).view(shape)
-        return dequantized_tensor
+        return self._dequantize_int8(tensor, quant_scale, quant_min).view(shape)
 
     def _dequantize_int8(self, tensor: Tensor, quant_scale: Tensor, quant_min: Tensor) -> Tensor:
         assert tensor.dtype == torch.uint8
@@ -159,10 +165,15 @@ class DeQuantizer:
 
 
 def get_AsyncPartitionedParameterSwapper(model: nn.Module):
-    for param_name, param in model.named_parameters():
-        if hasattr(param, 'nvme_swapper') and param.nvme_swapper is not None:
-            return param.nvme_swapper
-    return None
+    return next(
+        (
+            param.nvme_swapper
+            for param_name, param in model.named_parameters()
+            if hasattr(param, 'nvme_swapper')
+            and param.nvme_swapper is not None
+        ),
+        None,
+    )
 
 
 def recursive_setattr(model, module_name, module):
@@ -262,7 +273,7 @@ def wrap_load_from_state_dict(f):
         if hasattr(model.weight, 'weight_quantized') and getattr(
                 model.weight, 'weight_quantized') and not hasattr(model.weight, 'state_dict_quantized'):
             setattr(model.weight, 'state_dict_quantized', True)
-            key = prefix + 'weight'
+            key = f'{prefix}weight'
             if key in state_dict:
                 quantized_weight, quant_scale, quant_min = model.weight.quantizer.quantize(state_dict[key])
                 quantized_weight = quantized_weight.view(model.weight.dtype)

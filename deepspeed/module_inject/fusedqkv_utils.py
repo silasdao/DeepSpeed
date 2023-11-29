@@ -10,25 +10,22 @@ import re
 
 def split_by_qkvlist_and_refuse(qkv_list, split_size, split_dim=0, cat_dim=0):
     qkv_split_list = [torch.split(mat, split_size, dim=split_dim) for mat in qkv_list]
-    tp_fusedqkv_list = [
-        torch.cat([qkv_s[i] for qkv_s in qkv_split_list], dim=cat_dim) for i in range(len(qkv_split_list[0]))
+    return [
+        torch.cat([qkv_s[i] for qkv_s in qkv_split_list], dim=cat_dim)
+        for i in range(len(qkv_split_list[0]))
     ]
-    return tp_fusedqkv_list
 
 
 def require_tp_fused_qkvw(name, mp_size):
-    fused_qkvw_name_list = ['qkv_proj', 'query_key_value', 'attn.Wqkv']
-
     if mp_size == 1:
         return False
-    for fused_name in fused_qkvw_name_list:
-        if fused_name in name:
-            return True
-    return False
+    fused_qkvw_name_list = ['qkv_proj', 'query_key_value', 'attn.Wqkv']
+
+    return any(fused_name in name for fused_name in fused_qkvw_name_list)
 
 
 def prepare_tp_fused_qkvw(module_str, src, mp_size, gpu_index):
-    if src == None:
+    if src is None:
         return
     fused_type_dict = {
         'CodeGenBlock': 'codegentype',
@@ -91,6 +88,7 @@ def prepare_tp_fused_qkvw(module_str, src, mp_size, gpu_index):
     for module_name, fused_type in fused_type_dict.items():
         if re.search(module_name, module_str):
             return _transpose_fused_qkvw(src, mp_size, fused_type)
-    warning_once(f"Unrecognized fusedkqv weight type, default to using bloom type,"
-                 f"please check in prepare_tp_fused_qkvw() to avoid potential calculation errors")
+    warning_once(
+        'Unrecognized fusedkqv weight type, default to using bloom type,please check in prepare_tp_fused_qkvw() to avoid potential calculation errors'
+    )
     return _bloom_type_transpose(src, mp_size)

@@ -50,9 +50,9 @@ def masked_softmax_kernel(output_ptr, input_ptr, stride, mask_ptr, mask_stride, 
 
 def softmax(input: torch.Tensor, mask: torch.Tensor = None, dim=-1) -> torch.Tensor:
     assert input.is_contiguous()
-    assert (dim == -1) or (dim == len(input.shape) - 1), "Only dim=-1 is supported"
+    assert dim in [-1, len(input.shape) - 1], "Only dim=-1 is supported"
 
-    use_mask = False if mask is None else True
+    use_mask = mask is not None
     input_arg = input.view(-1, input.shape[-1])
     n_rows, n_cols = input_arg.shape
     BLOCK_SIZE = max(triton.next_power_of_2(n_cols), 2)

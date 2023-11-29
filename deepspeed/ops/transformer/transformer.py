@@ -157,7 +157,7 @@ class DeepSpeedTransformerFunction(Function):
                      (inp_size[0], (16 - (inp_size[1] % 16)), inp_size[2]), device=input.device, dtype=input.dtype)),
                 1)
             input_mask = torch.cat((input_mask, torch.ones((inp_size[0], input_mask.shape[1], input_mask.shape[2], \
-                                            (16 - (inp_size[1] % 16))), device=input_mask.device, dtype=input_mask.dtype) * -10000), 3)
+                                                (16 - (inp_size[1] % 16))), device=input_mask.device, dtype=input_mask.dtype) * -10000), 3)
 
         (output, inp_norm, qkv_tf, soft_inp, ctx_bufB, attn_o_inp, add_res, ff1_inp, gelu_inp, ff2_inp,
          attn_prob_dropout_mask, attn_output_dropout_mask, layer_output_dropout_mask, attn_layer_norm_var,
@@ -227,10 +227,7 @@ class DeepSpeedTransformerFunction(Function):
         if inp_size[1] % 16 != 0:
             output = torch.narrow(output, 1, 0, inp_size[1])
 
-        if config.return_tuple:
-            return (output, )  # outputs -> (output) : outputs[0] = output
-        else:
-            return output
+        return (output, ) if config.return_tuple else output
 
     @staticmethod
     def backward(ctx, grad_output):

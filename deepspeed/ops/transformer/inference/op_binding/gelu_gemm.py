@@ -32,7 +32,7 @@ class GELUGemmOp(BaseOp):
 
     def forward(self, input: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor, weight_out: torch.Tensor):
 
-        output = self.fused_gemm_gelu(
+        return self.fused_gemm_gelu(
             input,
             weight,
             weight.scale if hasattr(weight, 'scale') else torch.empty(1),  # type: ignore
@@ -40,6 +40,5 @@ class GELUGemmOp(BaseOp):
             weight_out,
             weight_out.scale if hasattr(weight_out, 'scale') else torch.empty(1),  # type: ignore
             self.config.dtype == torch.int8,
-            self.config.transposed_mode)
-
-        return output
+            self.config.transposed_mode,
+        )

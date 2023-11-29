@@ -24,25 +24,22 @@ def pre_basic(args, tid, read_op):
     buffer = get_accelerator().pin_memory(torch.empty(num_bytes, dtype=torch.uint8, device='cpu'))
     task_log(tid, f'{io_string} file {file} of size {num_bytes} bytes from buffer on device {buffer.device}')
 
-    ctxt = {}
-    ctxt['file'] = file
-    ctxt['num_bytes'] = num_bytes
-    ctxt['buffer'] = buffer
-    ctxt['elapsed_sec'] = 0
-
-    return ctxt
+    return {
+        'file': file,
+        'num_bytes': num_bytes,
+        'buffer': buffer,
+        'elapsed_sec': 0,
+    }
 
 
 def pre_basic_read(pool_params):
     args, tid = pool_params
-    ctxt = pre_basic(args, tid, True)
-    return ctxt
+    return pre_basic(args, tid, True)
 
 
 def pre_basic_write(pool_params):
     args, tid = pool_params
-    ctxt = pre_basic(args, tid, False)
-    return ctxt
+    return pre_basic(args, tid, False)
 
 
 def post_basic(pool_params):
@@ -97,7 +94,7 @@ def _aio_handle_tasklet(pool_params):
     task_barrier(aio_barrier, args.threads)
 
     # Run pre task
-    task_log(tid, f'running pre-task')
+    task_log(tid, 'running pre-task')
     ctxt = schedule["pre"]((args, tid))
     task_barrier(aio_barrier, args.threads)
 
@@ -112,7 +109,7 @@ def _aio_handle_tasklet(pool_params):
         ctxt["main_task_sec"] += stop_time - start_time
 
     # Run post task
-    task_log(tid, f'running post-task')
+    task_log(tid, 'running post-task')
     ctxt = schedule["post"]((args, tid, ctxt))
     task_barrier(aio_barrier, args.threads)
 

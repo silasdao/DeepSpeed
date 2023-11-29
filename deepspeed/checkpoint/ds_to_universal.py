@@ -111,7 +111,7 @@ def extract_zero_shards(dir, ds_checkpoint, indices_3D):
                 continue
 
             # pprint(f"dpt{dp_index}{pp_index}{tp_index} {param_group_id} {name} => {fragment_mapping.start}:{fragment_mapping.numel}")
-            for state_key in flat_state.keys():
+            for state_key in flat_state:
                 dump_param_fragment(dir, tp_index, dp_index, state_key, flat_state[state_key], name,
                                     fragment_mapping.start, fragment_mapping.numel)
 
@@ -176,9 +176,9 @@ def merge_tp_slices(ds_checkpoint, dir, slice_dir, tp_degree, name_and_shape):
         ckpt_dict = {}
         if any(re.match(pattern, name) for pattern in replicated_parameters):
             if len(slices) > 1:
-                assert all([slices[0].equal(other_slice) for other_slice in slices[1:]])
+                assert all(slices[0].equal(other_slice) for other_slice in slices[1:])
             param = slices[0]
-            # print(f'replicate {name} using first slice')
+                    # print(f'replicate {name} using first slice')
         elif any(re.match(pattern, name) for pattern in parameters_to_average):
             param = sum(slices) / len(slices)
             # print(f'merge {name} using average')
@@ -242,7 +242,7 @@ def _save_optimizer_state(args, ds_checkpoint):
     optim_sd = sd[OPTIMIZER_STATE_DICT]
     output_sd = {k: v for k, v in optim_sd.items() if k not in sharded_states}
     zero_output_folder = os.path.join(args.output_folder, "zero")
-    output_file_path = os.path.join(zero_output_folder, f"optimizer_state.pt")
+    output_file_path = os.path.join(zero_output_folder, "optimizer_state.pt")
     _save_checkpoint(output_file_path, output_sd)
 
 
@@ -252,7 +252,7 @@ def _check_for_required_state(ds_checkpoint):
 
 
 def main():
-    print(f'Convert DeepSpeed Checkpoint to Universal Checkpoint')
+    print('Convert DeepSpeed Checkpoint to Universal Checkpoint')
 
     args = parse_arguments()
     print(f'Converting DeepSpeed checkpoint in {args.input_folder} to Universal checkpoint in {args.output_folder}')
@@ -271,7 +271,7 @@ def main():
         slice_shapes += mp_sd[PARAM_SHAPES]
 
     # fix back to normal flat dict, merge duplicates for tp>1
-    slice_shapes = dict((k, v) for d in slice_shapes for k, v in d.items())
+    slice_shapes = {k: v for d in slice_shapes for k, v in d.items()}
     temp_dir = os.path.join(args.output_folder, 'tmp')
 
     print('*** 1. Extracting ZeRO fragments')

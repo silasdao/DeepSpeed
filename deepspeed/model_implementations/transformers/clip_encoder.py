@@ -42,23 +42,20 @@ class DSClipEncoder(CUDAGraph, torch.nn.Module):
         return self.static_output[self.iter]
 
     def forward(self, *inputs, **kwargs):
-        if self.enable_cuda_graph:
-            if self.cuda_graph_created[self.iter]:
-                outputs = self._graph_replay(*inputs, **kwargs)
-            else:
-                self._create_cuda_graph(*inputs, **kwargs)
-                outputs = self._graph_replay(*inputs, **kwargs)
-            self.iter = (self.iter + 1) % 2
-            return outputs
-        else:
+        if not self.enable_cuda_graph:
             return self.enc(*inputs, **kwargs)
+        if not self.cuda_graph_created[self.iter]:
+            self._create_cuda_graph(*inputs, **kwargs)
+        outputs = self._graph_replay(*inputs, **kwargs)
+        self.iter = (self.iter + 1) % 2
+        return outputs
 
     def _create_cuda_graph(self, *inputs, **kwargs):
         # warmup to create the workspace and cublas handle
         cuda_stream = torch.cuda.Stream()
         cuda_stream.wait_stream(torch.cuda.current_stream())
         with torch.cuda.stream(cuda_stream):
-            for i in range(3):
+            for _ in range(3):
                 ret = self._forward(*inputs, **kwargs)
         torch.cuda.current_stream().wait_stream(cuda_stream)
 

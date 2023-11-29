@@ -65,7 +65,7 @@ def validate_args(args):
 
 
 def main():
-    print(f'Testing deepspeed_aio python frontend')
+    print('Testing deepspeed_aio python frontend')
 
     args = parse_arguments()
     refine_args(args)

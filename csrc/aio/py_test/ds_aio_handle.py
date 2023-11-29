@@ -23,25 +23,24 @@ def pre_handle(args, tid, read_op):
     io_parallel = args.io_parallel if args.io_parallel else 1
     handle = AsyncIOBuilder().load().aio_handle(args.block_size, args.queue_depth, args.single_submit,
                                                 args.overlap_events, io_parallel)
-    task_log(tid, f'Created deepspeed aio handle')
+    task_log(tid, 'Created deepspeed aio handle')
 
     if args.gpu:
         buffer = torch.empty(num_bytes, dtype=torch.uint8, device=get_accelerator().device_name())
+    elif args.use_accelerator_pin_memory:
+        buffer = get_accelerator().pin_memory(torch.empty(num_bytes, dtype=torch.uint8, device='cpu'))
     else:
-        if args.use_accelerator_pin_memory:
-            buffer = get_accelerator().pin_memory(torch.empty(num_bytes, dtype=torch.uint8, device='cpu'))
-        else:
-            buffer = handle.new_cpu_locked_tensor(num_bytes, torch.empty(0, dtype=torch.uint8))
+        buffer = handle.new_cpu_locked_tensor(num_bytes, torch.empty(0, dtype=torch.uint8))
 
     task_log(tid, f'Allocate tensor of size {num_bytes} bytes')
 
-    ctxt = {}
-    ctxt['file'] = file
-    ctxt['num_bytes'] = num_bytes
-    ctxt['handle'] = handle
-    ctxt['buffer'] = buffer
-    ctxt['elapsed_sec'] = 0
-
+    ctxt = {
+        'file': file,
+        'num_bytes': num_bytes,
+        'handle': handle,
+        'buffer': buffer,
+        'elapsed_sec': 0,
+    }
     task_log(tid, f'{io_string} file {file} of size {num_bytes} bytes from buffer on device {buffer.device}')
 
     return ctxt
@@ -49,14 +48,12 @@ def pre_handle(args, tid, read_op):
 
 def pre_handle_read(pool_params):
     args, tid = pool_params
-    ctxt = pre_handle(args, tid, True)
-    return ctxt
+    return pre_handle(args, tid, True)
 
 
 def pre_handle_write(pool_params):
     args, tid = pool_params
-    ctxt = pre_handle(args, tid, False)
-    return ctxt
+    return pre_handle(args, tid, False)
 
 
 def post_handle(pool_params):
@@ -141,7 +138,7 @@ def _aio_handle_tasklet(pool_params):
     task_barrier(aio_barrier, args.threads)
 
     # Run pre task
-    task_log(tid, f'running pre-task')
+    task_log(tid, 'running pre-task')
     ctxt = schedule["pre"]((args, tid))
     task_barrier(aio_barrier, args.threads)
 
@@ -156,7 +153,7 @@ def _aio_handle_tasklet(pool_params):
         ctxt["main_task_sec"] += stop_time - start_time
 
     # Run post task
-    task_log(tid, f'running post-task')
+    task_log(tid, 'running post-task')
     ctxt = schedule["post"]((args, tid, ctxt))
     task_barrier(aio_barrier, args.threads)
 

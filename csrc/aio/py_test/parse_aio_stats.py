@@ -67,10 +67,7 @@ def get_file_key(file):
 def get_thread_count(file):
     f, _ = os.path.splitext(os.path.basename(file))
     fields = f.split('_')
-    for key in fields:
-        if key[0] == 't':
-            return int(key[1:])
-    return 1
+    return next((int(key[1:]) for key in fields if key[0] == 't'), 1)
 
 
 """
@@ -88,7 +85,7 @@ For the above sample, -metric = "read_speed" corresponds to "E2E Read Speed", an
 def get_metric(file, metric):
     thread_count = get_thread_count(file)
     with open(file) as f:
-        for line in f.readlines():
+        for line in f:
             if line.startswith(METRIC_SEARCH[metric]):
                 if metric in [READ_SPEED, WRITE_SPEED]:
                     fields = line.split()
@@ -101,7 +98,7 @@ def get_metric(file, metric):
 
 
 def validate_args(args):
-    if not args.metric in PERF_METRICS:
+    if args.metric not in PERF_METRICS:
         print(f'{args.metric} is not a valid performance metrics')
         return False
 

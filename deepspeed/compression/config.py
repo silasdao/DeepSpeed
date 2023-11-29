@@ -9,13 +9,10 @@ from ..runtime.config_utils import get_scalar_param, get_list_param
 
 
 def get_compression_config(param_dict):
-    #
-    output = {}
-
     if COMPRESSION_TRAINING not in param_dict.keys():
         param_dict[COMPRESSION_TRAINING] = {}
     sub_param_dict = param_dict[COMPRESSION_TRAINING]
-    output[WEIGHT_QUANTIZATION] = get_weight_quantization(sub_param_dict)
+    output = {WEIGHT_QUANTIZATION: get_weight_quantization(sub_param_dict)}
     output[ACTIVATION_QUANTIZATION] = get_activation_quantization(sub_param_dict)
     output[SPARSE_PRUNING] = get_sparse_pruning(sub_param_dict)
     output[ROW_PRUNING] = get_row_pruning(sub_param_dict)
@@ -28,8 +25,7 @@ def get_compression_config(param_dict):
 
 
 def get_layer_reduction(param_dict):
-    output = {}
-    output[LAYER_REDUCTION_ENABLED] = LAYER_REDUCTION_ENABLED_DEFAULT
+    output = {LAYER_REDUCTION_ENABLED: LAYER_REDUCTION_ENABLED_DEFAULT}
     if get_layer_reduction_enabled(param_dict):
         output[LAYER_REDUCTION_ENABLED] = get_layer_reduction_enabled(param_dict)
         for key, val in get_layer_reduction_params(param_dict).items():
@@ -45,12 +41,11 @@ def get_layer_reduction_enabled(param_dict):
 
 
 def get_layer_reduction_params(param_dict):
-    if LAYER_REDUCTION in param_dict.keys():
-        layer_reduction_params = copy.copy(param_dict[LAYER_REDUCTION])
-        layer_reduction_params.pop(LAYER_REDUCTION_ENABLED)
-        return layer_reduction_params
-    else:
+    if LAYER_REDUCTION not in param_dict.keys():
         return False
+    layer_reduction_params = copy.copy(param_dict[LAYER_REDUCTION])
+    layer_reduction_params.pop(LAYER_REDUCTION_ENABLED)
+    return layer_reduction_params
 
 
 def get_quantize_enabled(param_dict):
@@ -63,12 +58,14 @@ def get_quantize_enabled(param_dict):
 
 
 def get_weight_quantization(param_dict):
-    output = {}
     if WEIGHT_QUANTIZATION not in param_dict.keys():
         param_dict[WEIGHT_QUANTIZATION] = {SHARED_PARAMETERS: {}, DIFFERENT_GROUPS: {}}
     sub_param_dict = param_dict[WEIGHT_QUANTIZATION]
-    # shared parameters
-    output[SHARED_PARAMETERS] = get_weight_quantization_shared_parameters(sub_param_dict)
+    output = {
+        SHARED_PARAMETERS: get_weight_quantization_shared_parameters(
+            sub_param_dict
+        )
+    }
     # each sub-groups
     if output[SHARED_PARAMETERS][WEIGHT_QUANTIZE_ENABLED]:
         assert DIFFERENT_GROUPS in sub_param_dict.keys(
@@ -152,12 +149,14 @@ def get_weight_quantization_different_groups(param_dict):
 
 
 def get_activation_quantization(param_dict):
-    output = {}
     if ACTIVATION_QUANTIZATION not in param_dict.keys():
         param_dict[ACTIVATION_QUANTIZATION] = {SHARED_PARAMETERS: {}, DIFFERENT_GROUPS: {}}
     sub_param_dict = param_dict[ACTIVATION_QUANTIZATION]
-    # shared parameters
-    output[SHARED_PARAMETERS] = get_activation_quantization_shared_parameters(sub_param_dict)
+    output = {
+        SHARED_PARAMETERS: get_activation_quantization_shared_parameters(
+            sub_param_dict
+        )
+    }
     # each sub-groups
     if output[SHARED_PARAMETERS][ACTIVATION_QUANTIZATION_ENABLED]:
         assert DIFFERENT_GROUPS in sub_param_dict.keys(
@@ -214,12 +213,12 @@ def get_activation_quantization_different_groups(param_dict):
 
 
 def get_sparse_pruning(param_dict):
-    output = {}
     if SPARSE_PRUNING not in param_dict.keys():
         param_dict[SPARSE_PRUNING] = {SHARED_PARAMETERS: {}, DIFFERENT_GROUPS: {}}
     sub_param_dict = param_dict[SPARSE_PRUNING]
-    # shared parameters
-    output[SHARED_PARAMETERS] = get_sparse_pruning_shared_parameters(sub_param_dict)
+    output = {
+        SHARED_PARAMETERS: get_sparse_pruning_shared_parameters(sub_param_dict)
+    }
     # each sub-groups
     if output[SHARED_PARAMETERS][SPARSE_PRUNING_ENABLED] and output[SHARED_PARAMETERS][
             SPARSE_PRUNING_METHOD] != SPARSE_PRUNING_METHOD_SNIP_MOMENTUM:
@@ -248,8 +247,10 @@ def get_sparse_pruning_shared_parameters(param_dict):
                                                                     SPARSE_PRUNING_BLOCK_PATTERN_DEFAULT)
             output[SPARSE_PRUNING_DENSE_RATIO] = get_scalar_param(sub_param_dict, SPARSE_PRUNING_DENSE_RATIO,
                                                                   SPARSE_PRUNING_DENSE_RATIO_DEFAULT)
-            assert output[SPARSE_PRUNING_DENSE_RATIO] > 0 and output[
-                SPARSE_PRUNING_DENSE_RATIO] < 1, f"Invalid dense_ratio value. Must be less than 1"
+            assert (
+                output[SPARSE_PRUNING_DENSE_RATIO] > 0
+                and output[SPARSE_PRUNING_DENSE_RATIO] < 1
+            ), "Invalid dense_ratio value. Must be less than 1"
             output[SPARSE_PRUNING_SCHEDULE_OFFSET_STRIDE] = get_scalar_param(
                 sub_param_dict, SPARSE_PRUNING_SCHEDULE_OFFSET_STRIDE, SPARSE_PRUNING_SCHEDULE_OFFSET_STRIDE_DEFAULT)
             output[SPARSE_PRUNING_EXCLUDED_MODULES] = get_list_param(sub_param_dict, SPARSE_PRUNING_EXCLUDED_MODULES,
@@ -257,8 +258,10 @@ def get_sparse_pruning_shared_parameters(param_dict):
             output[SPARSE_PRUNING_SCHEDULE_OFFSET_END] = get_scalar_param(sub_param_dict,
                                                                           SPARSE_PRUNING_SCHEDULE_OFFSET_END,
                                                                           output[SPARSE_PRUNING_SCHEDULE_OFFSET])
-            assert output[SPARSE_PRUNING_SCHEDULE_OFFSET] <= output[
-                SPARSE_PRUNING_SCHEDULE_OFFSET_END], f"Invalid schedule_offset and schedule_offset_end values"
+            assert (
+                output[SPARSE_PRUNING_SCHEDULE_OFFSET]
+                <= output[SPARSE_PRUNING_SCHEDULE_OFFSET_END]
+            ), "Invalid schedule_offset and schedule_offset_end values"
     else:
         output[SPARSE_PRUNING_ENABLED] = SPARSE_PRUNING_ENABLED_DEFAULT
         output[SPARSE_PRUNING_METHOD] = SPARSE_PRUNING_METHOD_DEFAULT
@@ -287,12 +290,10 @@ def get_sparse_pruning_different_groups(param_dict):
 
 
 def get_row_pruning(param_dict):
-    output = {}
     if ROW_PRUNING not in param_dict.keys():
         param_dict[ROW_PRUNING] = {SHARED_PARAMETERS: {}, DIFFERENT_GROUPS: {}}
     sub_param_dict = param_dict[ROW_PRUNING]
-    # shared parameters
-    output[SHARED_PARAMETERS] = get_row_pruning_shared_parameters(sub_param_dict)
+    output = {SHARED_PARAMETERS: get_row_pruning_shared_parameters(sub_param_dict)}
     # each sub-groups
     if output[SHARED_PARAMETERS][ROW_PRUNING_ENABLED]:
         assert DIFFERENT_GROUPS in sub_param_dict.keys(
@@ -340,12 +341,12 @@ def get_row_pruning_different_groups(param_dict):
 
 
 def get_head_pruning(param_dict):
-    output = {}
     if HEAD_PRUNING not in param_dict.keys():
         param_dict[HEAD_PRUNING] = {SHARED_PARAMETERS: {}, DIFFERENT_GROUPS: {}}
     sub_param_dict = param_dict[HEAD_PRUNING]
-    # shared parameters
-    output[SHARED_PARAMETERS] = get_head_pruning_shared_parameters(sub_param_dict)
+    output = {
+        SHARED_PARAMETERS: get_head_pruning_shared_parameters(sub_param_dict)
+    }
     # each sub-groups
     if output[SHARED_PARAMETERS][HEAD_PRUNING_ENABLED]:
         assert DIFFERENT_GROUPS in sub_param_dict.keys(
@@ -398,12 +399,14 @@ def get_head_pruning_different_groups(param_dict):
 
 
 def get_channel_pruning(param_dict):
-    output = {}
     if CHANNEL_PRUNING not in param_dict.keys():
         param_dict[CHANNEL_PRUNING] = {SHARED_PARAMETERS: {}, DIFFERENT_GROUPS: {}}
     sub_param_dict = param_dict[CHANNEL_PRUNING]
-    # shared parameters
-    output[SHARED_PARAMETERS] = get_channel_pruning_shared_parameters(sub_param_dict)
+    output = {
+        SHARED_PARAMETERS: get_channel_pruning_shared_parameters(
+            sub_param_dict
+        )
+    }
     # each sub-groups
     if output[SHARED_PARAMETERS][CHANNEL_PRUNING_ENABLED]:
         assert DIFFERENT_GROUPS in sub_param_dict.keys(

@@ -18,11 +18,7 @@ class DeepSpeedNebulaConfig(DeepSpeedConfigObject):
         self.num_of_version_in_retention = None
         self.enable_nebula_load = None
 
-        if NEBULA in param_dict.keys():
-            nebula_dict = param_dict[NEBULA]
-        else:
-            nebula_dict = {}
-
+        nebula_dict = param_dict[NEBULA] if NEBULA in param_dict.keys() else {}
         self._initialize(nebula_dict)
 
     def _initialize(self, nebula_dict):

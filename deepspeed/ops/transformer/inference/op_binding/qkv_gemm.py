@@ -62,8 +62,7 @@ class QKVGemmOp(BaseOp):
             tmp = torch.matmul(inp_norm, weight)
             if add_bias:
                 tmp += bias
-            output = [tmp, inp_norm]
-            return output
+            return [tmp, inp_norm]
         else:
             raise NotImplementedError
 

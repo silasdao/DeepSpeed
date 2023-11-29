@@ -115,13 +115,12 @@ class DeepSpeedDataLoader(object):
     def __next__(self):
         if self.tput_timer:
             self.tput_timer.start()
-        if self.curriculum_learning_enabled:
-            data = next(self.data_iterator)
-            if self.post_process_func is not None:
-                data = self.post_process_func(data, self.data_sampler.state_dict())
-            return data
-        else:
+        if not self.curriculum_learning_enabled:
             return next(self.data)
+        data = next(self.data_iterator)
+        if self.post_process_func is not None:
+            data = self.post_process_func(data, self.data_sampler.state_dict())
+        return data
 
     def _create_dataloader(self):
         if self.curriculum_learning_enabled:
@@ -137,7 +136,6 @@ class DeepSpeedDataLoader(object):
                                              collate_fn=self.collate_fn,
                                              num_workers=self.num_local_io_workers)
             self.data_iterator = iter(self.dataloader)
-            return self.dataloader
         else:
             if self.collate_fn is None:
                 self.dataloader = DataLoader(self.dataset,
@@ -154,9 +152,10 @@ class DeepSpeedDataLoader(object):
                                              collate_fn=self.collate_fn,
                                              num_workers=self.num_local_io_workers,
                                              drop_last=self.dataloader_drop_last)
-            self.data = (x for x in self.dataloader)
+            self.data = iter(self.dataloader)
 
-            return self.dataloader
+
+        return self.dataloader
 
 
 # DataLoader([(torch.randn(3, 3), torch.tensor(i % 2)) for i in range(10)], batch_size=2))

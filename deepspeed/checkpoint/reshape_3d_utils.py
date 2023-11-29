@@ -67,7 +67,7 @@ class model_3d_desc(object):
             err_msg.append(
                 f'Expansion reshape not supported - {DP_DIM}: {self.dp_degree} ---> {target_3d_desc.dp_degree}')
 
-        return len(err_msg) == 0, err_msg
+        return not err_msg, err_msg
 
 
 def get_model_3d_descriptor(dir):

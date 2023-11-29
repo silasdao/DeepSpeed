@@ -38,10 +38,21 @@ class SoftmaxContextOp(BaseOp):
         else:
             alibi = torch.empty(1)
 
-        output = self.softmax_context_func(query_key_value, attn_mask, self.config.rotary_dim, self.config.rotate_half,
-                                           self.config.rotate_every_two, heads, num_kv, norm_factor,
-                                           self.config.triangular_masking, self.config.local_attention,
-                                           self.config.window_size, no_masking, layer_id, num_layers, alibi,
-                                           self.config.rope_theta)
-
-        return output
+        return self.softmax_context_func(
+            query_key_value,
+            attn_mask,
+            self.config.rotary_dim,
+            self.config.rotate_half,
+            self.config.rotate_every_two,
+            heads,
+            num_kv,
+            norm_factor,
+            self.config.triangular_masking,
+            self.config.local_attention,
+            self.config.window_size,
+            no_masking,
+            layer_id,
+            num_layers,
+            alibi,
+            self.config.rope_theta,
+        )

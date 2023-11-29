@@ -109,11 +109,7 @@ def init_compression(model, deepspeed_config, teacher_model=None, mpu=None):
             The mpu module for Row/Column parallelism
     """
     compress_methods = get_compression_config(check_deepspeed_config(deepspeed_config))
-    if hasattr(model, 'module'):
-        c_model = model.module
-    else:
-        c_model = model
-
+    c_model = model.module if hasattr(model, 'module') else model
     # For layer reduction
     if compress_methods[LAYER_REDUCTION][LAYER_REDUCTION_ENABLED]:
         assert teacher_model is not None, "Teacher model is required for layer reduction"
@@ -157,11 +153,7 @@ def redundancy_clean(model, deepspeed_config, mpu=None):
             The mpu module for Row/Column parallelism
     """
     compress_methods = get_compression_config(check_deepspeed_config(deepspeed_config))
-    if hasattr(model, 'module'):
-        c_model = model.module
-    else:
-        c_model = model
-
+    c_model = model.module if hasattr(model, 'module') else model
     layer_added_compress_methods_tmp = get_compress_methods(c_model, compress_methods, mpu=mpu)
     # sort methods
     order_list = [
@@ -172,7 +164,7 @@ def redundancy_clean(model, deepspeed_config, mpu=None):
 
     for module_name_lists, related_module_name_lists, compression_technique in layer_added_compress_methods:
         stored_mask = []
-        need_mask = True if related_module_name_lists else False
+        need_mask = bool(related_module_name_lists)
         for i, mnl in enumerate(module_name_lists):
             for module_name in mnl:
                 mask = fix_compression(c_model, module_name, compression_technique, dim_reduction=need_mask)
@@ -205,7 +197,7 @@ def student_initialization(student_model, teacher_model, deepspeed_config):
 
     module_name_prefix = compress_methods[MODULE_NAME_PREFIX]
     teacher_layer = compress_methods[TEACHER_LAYER]
-    student_layer = [i for i in range(len(teacher_layer))]
+    student_layer = list(range(len(teacher_layer)))
     other_module_name = compress_methods[OTHER_MODULE_NAME]
     '''
         name_prefix (`str`)
@@ -227,8 +219,12 @@ def student_initialization(student_model, teacher_model, deepspeed_config):
     '''
     assert len(student_layer) == len(teacher_layer)
     for s_name, t_name in zip(student_layer, teacher_layer):
-        s_module = recursive_getattr(student_model, module_name_prefix + '.' + str(s_name))
-        t_module = recursive_getattr(teacher_model, module_name_prefix + '.' + str(t_name))
+        s_module = recursive_getattr(
+            student_model, f'{module_name_prefix}.{str(s_name)}'
+        )
+        t_module = recursive_getattr(
+            teacher_model, f'{module_name_prefix}.{str(t_name)}'
+        )
         for s_param, t_param in zip(s_module.parameters(), t_module.parameters()):
             s_param.data.copy_(t_param.data)
     for name in other_module_name:

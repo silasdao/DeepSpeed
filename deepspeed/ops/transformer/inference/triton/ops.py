@@ -36,21 +36,24 @@ def fused_gemm_gelu(input,
     # intermediate fc in FF
     intm_out = matmul_ext.matmul(input, weight, bias=bias, activation=activation, use_triton=True)
 
-    # output fc in FF
-    ff_out = matmul_ext.matmul(
+    return matmul_ext.matmul(
         intm_out,
         weight_out,
         bias=None,
         activation="",  # bias added layer with residual_add + bias + layerNorm layer
-        use_triton=True)
-    return ff_out
+        use_triton=True,
+    )
 
 
 def linear_func(input, weight, bias, add_bias, do_flash_attn, num_heads, transposed_mode=False):
     assert not transposed_mode and not do_flash_attn
-    qkv_out = matmul_ext.matmul(input, weight, bias=(bias if add_bias else None), activation="", use_triton=True)
-
-    return qkv_out
+    return matmul_ext.matmul(
+        input,
+        weight,
+        bias=(bias if add_bias else None),
+        activation="",
+        use_triton=True,
+    )
 
 
 def mlp_gemm_func(input,

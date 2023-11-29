@@ -51,7 +51,9 @@ class BF16_Optimizer(ZeROOptimizer):
         self.allgather_bucket_size = int(allgather_bucket_size)
         self.dp_process_group = dp_process_group
         self.dp_rank = dist.get_rank(group=self.dp_process_group)
-        self.real_dp_process_group = [dp_process_group for i in range(len(self.optimizer.param_groups))]
+        self.real_dp_process_group = [
+            dp_process_group for _ in range(len(self.optimizer.param_groups))
+        ]
 
         # Use torch (un)flatten ops
         self.flatten = _flatten_dense_tensors
@@ -85,7 +87,9 @@ class BF16_Optimizer(ZeROOptimizer):
 
     def _setup_for_real_optimizer(self):
         dp_world_size = dist.get_world_size(group=self.dp_process_group)
-        self.partition_count = [dp_world_size for i in range(len(self.optimizer.param_groups))]
+        self.partition_count = [
+            dp_world_size for _ in range(len(self.optimizer.param_groups))
+        ]
 
         for i, param_group in enumerate(self.optimizer.param_groups):
             see_memory_usage(f'before initializing group {i}', force=True)
@@ -340,9 +344,10 @@ class BF16_Optimizer(ZeROOptimizer):
                 param.grad = None
 
     def state_dict(self):
-        state_dict = {}
-        state_dict[CLIP_GRAD] = self.clip_grad
-        state_dict[BASE_OPTIMIZER_STATE] = self.optimizer.state_dict()
+        state_dict = {
+            CLIP_GRAD: self.clip_grad,
+            BASE_OPTIMIZER_STATE: self.optimizer.state_dict(),
+        }
         state_dict[SINGLE_PARTITION_OF_FP32_GROUPS] = self.fp32_groups_flat_partition
         state_dict[GROUP_PADDINGS] = self.group_paddings
         state_dict[PARTITION_COUNT] = self.partition_count
@@ -378,7 +383,7 @@ class BF16_Optimizer(ZeROOptimizer):
         current_rank_sd = state_dict_list[dp_rank]
 
         ckpt_version = current_rank_sd.get(DS_VERSION, False)
-        assert ckpt_version, f"Empty ds_version in checkpoint, not clear how to proceed"
+        assert ckpt_version, "Empty ds_version in checkpoint, not clear how to proceed"
         ckpt_version = pkg_version.parse(ckpt_version)
 
         self.clip_grad = current_rank_sd.get(CLIP_GRAD, self.clip_grad)

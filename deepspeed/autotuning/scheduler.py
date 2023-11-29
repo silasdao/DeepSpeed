@@ -38,9 +38,7 @@ class ResourceManager:
 
         self.nodes = []
         self.num_gpus_per_node = num_gpus_per_node
-        for host in hosts:
-            self.nodes.append(Node(host, num_gpus_per_node))
-
+        self.nodes.extend(Node(host, num_gpus_per_node) for host in hosts)
         self.experiment_queue = []
         self.running_experiments = {}
         self.finished_experiments = {}
@@ -60,32 +58,31 @@ class ResourceManager:
         for exp_path in exp_paths:
             if exp_path in self.exp_paths:
                 continue
-            else:
-                self.exp_paths.add(exp_path)
-                with open(exp_path, "r") as fd:
-                    exp = hjson.load(fd)
-                    exp["exp_id"] = self.experiment_count
-                    self.experiment_count += 1
+            self.exp_paths.add(exp_path)
+            with open(exp_path, "r") as fd:
+                exp = hjson.load(fd)
+                exp["exp_id"] = self.experiment_count
+                self.experiment_count += 1
 
-                    result_dir = exp["result_dir"] = os.path.join(self.results_dir, exp['name'])
-                    if AUTOTUNING in exp["ds_config"]:
-                        metric_file = os.path.join(result_dir, "metrics.json")
-                        exp["ds_config"][AUTOTUNING][AUTOTUNING_METRIC_PATH] = metric_file
-                    stderr_file = os.path.join(result_dir, "stderr.log")
-                    model_info_file = os.path.join(result_dir, "model_info.json")
+                result_dir = exp["result_dir"] = os.path.join(self.results_dir, exp['name'])
+                if AUTOTUNING in exp["ds_config"]:
                     metric_file = os.path.join(result_dir, "metrics.json")
+                    exp["ds_config"][AUTOTUNING][AUTOTUNING_METRIC_PATH] = metric_file
+                stderr_file = os.path.join(result_dir, "stderr.log")
+                model_info_file = os.path.join(result_dir, "model_info.json")
+                metric_file = os.path.join(result_dir, "metrics.json")
 
-                    # skip existing experiments (except for the ones that were interrupted)
-                    if os.path.exists(result_dir) and os.path.exists(stderr_file):
-                        if not was_interruptted(stderr_file):
-                            err = search_error(stderr_file)
-                            exp_id = exp["exp_id"]
-                            self.finished_experiments[exp_id] = (exp, err)
-                            if err or os.path.exists(metric_file) or os.path.exists(model_info_file):
-                                logger.info(f"Skipping exp {exp['name']} whose result already exists")
-                                continue
+                # skip existing experiments (except for the ones that were interrupted)
+                if os.path.exists(result_dir) and os.path.exists(stderr_file):
+                    if not was_interruptted(stderr_file):
+                        err = search_error(stderr_file)
+                        exp_id = exp["exp_id"]
+                        self.finished_experiments[exp_id] = (exp, err)
+                        if err or os.path.exists(metric_file) or os.path.exists(model_info_file):
+                            logger.info(f"Skipping exp {exp['name']} whose result already exists")
+                            continue
 
-                    self.experiment_queue.append(exp)
+                self.experiment_queue.append(exp)
 
     def run_job(self, exp: dict, reservations):
         exp_id = exp["exp_id"]
@@ -137,23 +134,22 @@ class ResourceManager:
         for node in self.nodes:
             if num_nodes == 0:
                 break
-            slots = node.reserve_slots(slot_request=slot_request)
-            if slots:
+            if slots := node.reserve_slots(slot_request=slot_request):
                 reservations.append(Reservation(node=node, slots=slots))
                 num_nodes -= 1
 
         if num_nodes == 0:
             # request satisfied
             return reservations
-        else:
-            # request not satisfied
-            for reservation in reservations:
-                reservation.restore_slots()
+        # request not satisfied
+        for reservation in reservations:
+            reservation.restore_slots()
 
     def status(self):
-        status = ""
-        for node in self.nodes:
-            status += f"{node.host} ({len(node.idle_slots)} idle gpus), "
+        status = "".join(
+            f"{node.host} ({len(node.idle_slots)} idle gpus), "
+            for node in self.nodes
+        )
         return status[:-1]
 
     def run(self):
@@ -163,14 +159,7 @@ class ResourceManager:
             exp = self.experiment_queue.pop(0)
             logger.debug(f'Popped exp_id = {exp["exp_id"]} from the queue')
             logger.debug(f'Resource status: {self.status()}')
-            reservations = self.resource_request(exp)
-
-            if not reservations:
-                logger.debug(f'Unable to schedule exp_id = {exp["exp_id"]}')
-                self.experiment_queue.insert(0, exp)
-                logger.debug(f'Put exp_id = {exp["exp_id"]} back into the queue')
-                self.experiment_check(pbar)
-            else:
+            if reservations := self.resource_request(exp):
                 desc = ""
                 for reservation in reservations:
                     reservation.slots.sort()
@@ -180,6 +169,11 @@ class ResourceManager:
                 logger.debug(f'Running exp_id = {exp["exp_id"]} on {desc}')
                 self.run_job(exp, reservations)
 
+            else:
+                logger.debug(f'Unable to schedule exp_id = {exp["exp_id"]}')
+                self.experiment_queue.insert(0, exp)
+                logger.debug(f'Put exp_id = {exp["exp_id"]} back into the queue')
+                self.experiment_check(pbar)
         # All pending experiments are scheduled, waiting for them to complete
         while len(self.running_experiments) > 0:
             self.experiment_check(pbar)
@@ -290,22 +284,16 @@ def get_job_id():
     # Infrastructure-specific job-id
     infra_job_id = None
     if "DLWS_JOB_ID" in os.environ:
-        infra_job_id = os.environ["DLWS_JOB_ID"]
+        return os.environ["DLWS_JOB_ID"]
     elif "DLTS_JOB_ID" in os.environ:
-        infra_job_id = os.environ["DLTS_JOB_ID"]
+        return os.environ["DLTS_JOB_ID"]
     else:
-        infra_job_id = "unknown-job-id"
-
-    return infra_job_id
+        return "unknown-job-id"
 
 
 def get_user():
     user = None
-    if "USER" in os.environ:
-        user = os.environ["USER"]
-    else:
-        user = "unknown-user"
-    return user
+    return os.environ.get("USER", "unknown-user")
 
 
 def run_experiment(exp: dict, reservations, user_script, user_args):
@@ -400,9 +388,9 @@ def clean_up(exp: dict, reservations):
     env = os.environ.copy()
     env['PDSH_RCMD_TYPE'] = 'ssh'
 
-    nodes_str = ""
-    for reservation in reservations:
-        nodes_str += f"{reservation.node.host},"
+    nodes_str = "".join(
+        f"{reservation.node.host}," for reservation in reservations
+    )
     nodes_str = nodes_str[:-1]
     logger.debug(f"Cleaning up exp_id = {exp['exp_id']} on the following workers: {nodes_str}")
 
@@ -416,7 +404,7 @@ def clean_up(exp: dict, reservations):
         exp['name'],
     ]
     cmd = pdsh_cmd + kill_cmd
-    logger.debug("cmd = {}".format(' '.join(cmd)))
+    logger.debug(f"cmd = {' '.join(cmd)}")
 
     result = subprocess.Popen(cmd, env=env)
     result.wait()

@@ -30,9 +30,7 @@ class NPU_Accelerator(DeepSpeedAccelerator):
 
     # Device APIs
     def device_name(self, device_index=None):
-        if device_index == None:
-            return 'npu'
-        return 'npu:{}'.format(device_index)
+        return 'npu' if device_index is None else f'npu:{device_index}'
 
     def device(self, device_index=None):
         return torch.npu.device(device_index)
@@ -44,7 +42,7 @@ class NPU_Accelerator(DeepSpeedAccelerator):
         return torch.npu.current_device()
 
     def current_device_name(self):
-        return 'npu:{}'.format(torch.npu.current_device())
+        return f'npu:{torch.npu.current_device()}'
 
     def device_count(self):
         return torch.npu.device_count()
@@ -154,9 +152,7 @@ class NPU_Accelerator(DeepSpeedAccelerator):
 
     # Misc
     def amp(self):
-        if hasattr(torch.npu, 'amp'):
-            return torch.npu.amp
-        return None
+        return torch.npu.amp if hasattr(torch.npu, 'amp') else None
 
     def is_available(self):
         return torch.npu.is_available()
@@ -214,10 +210,7 @@ class NPU_Accelerator(DeepSpeedAccelerator):
 
     def on_accelerator(self, tensor):
         device_str = str(tensor.device)
-        if device_str.startswith('npu:'):
-            return True
-        else:
-            return False
+        return bool(device_str.startswith('npu:'))
 
     def op_builder_dir(self):
         try:

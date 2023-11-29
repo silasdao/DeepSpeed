@@ -66,25 +66,24 @@ class CCLBackend(TorchBackend):
                 kwargs['dst'] = kwargs['group'].index(kwargs['dst'])
             if 'src' in kwargs:
                 kwargs['src'] = kwargs['group'].index(kwargs['src'])
-            func = "self.ccl_comm_op." + name
+            func = f"self.ccl_comm_op.{name}"
             eval(func)(*(kwargs.values()))
             return CCLHandler(self.ccl_comm_op)
         else:
-            func = "super(CCLBackend, self)." + name
+            func = f"super(CCLBackend, self).{name}"
             return eval(func)(*(kwargs.values()))
 
     def all_reduce(self, tensor, op=ReduceOp.SUM, group=None, async_op=False):
         use_caching = False
-        if use_caching:
-            match_id = f"{tensor.size()}-{op}"
-            return self.run_collective(name="all_reduce_caching",
-                                       tensor=tensor,
-                                       op=op,
-                                       match_id=match_id,
-                                       group=group,
-                                       async_op=async_op)
-        else:
+        if not use_caching:
             return self.run_collective(name="all_reduce", tensor=tensor, op=op, group=group, async_op=async_op)
+        match_id = f"{tensor.size()}-{op}"
+        return self.run_collective(name="all_reduce_caching",
+                                   tensor=tensor,
+                                   op=op,
+                                   match_id=match_id,
+                                   group=group,
+                                   async_op=async_op)
 
     def inference_all_reduce(self, tensor, op=ReduceOp.SUM, group=None, async_op=False):
         return self.run_collective(name="inference_all_reduce", tensor=tensor, op=op, group=group, async_op=async_op)

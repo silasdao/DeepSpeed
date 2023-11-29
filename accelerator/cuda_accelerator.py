@@ -44,9 +44,7 @@ class CUDA_Accelerator(DeepSpeedAccelerator):
 
     # Device APIs
     def device_name(self, device_index=None):
-        if device_index == None:
-            return 'cuda'
-        return 'cuda:{}'.format(device_index)
+        return 'cuda' if device_index is None else f'cuda:{device_index}'
 
     def device(self, device_index=None):
         return torch.cuda.device(device_index)
@@ -58,7 +56,7 @@ class CUDA_Accelerator(DeepSpeedAccelerator):
         return torch.cuda.current_device()
 
     def current_device_name(self):
-        return 'cuda:{}'.format(torch.cuda.current_device())
+        return f'cuda:{torch.cuda.current_device()}'
 
     def device_count(self):
         return torch.cuda.device_count()
@@ -154,12 +152,11 @@ class CUDA_Accelerator(DeepSpeedAccelerator):
         return torch.cuda.get_device_properties(device_index).total_memory
 
     def available_memory(self, device_index=None):
-        if pynvml:
-            handle = pynvml.nvmlDeviceGetHandleByIndex(device_index)
-            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-            return info.free
-        else:
+        if not pynvml:
             return self.total_memory(device_index) - self.memory_allocated(device_index)
+        handle = pynvml.nvmlDeviceGetHandleByIndex(device_index)
+        info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+        return info.free
 
     # Data types
     def is_bf16_supported(self):
@@ -167,19 +164,14 @@ class CUDA_Accelerator(DeepSpeedAccelerator):
 
     def is_fp16_supported(self):
         major, _ = torch.cuda.get_device_capability()
-        if major >= 7:
-            return True
-        else:
-            return False
+        return major >= 7
 
     def supported_dtypes(self):
         return [torch.float, torch.half, torch.bfloat16]
 
     # Misc
     def amp(self):
-        if hasattr(torch.cuda, 'amp'):
-            return torch.cuda.amp
-        return None
+        return torch.cuda.amp if hasattr(torch.cuda, 'amp') else None
 
     def is_available(self):
         return torch.cuda.is_available()
@@ -200,10 +192,7 @@ class CUDA_Accelerator(DeepSpeedAccelerator):
 
     def is_triton_supported(self):
         major, _ = torch.cuda.get_device_capability()
-        if major >= 8:
-            return True
-        else:
-            return False
+        return major >= 8
 
     # Tensor operations
 
@@ -243,10 +232,7 @@ class CUDA_Accelerator(DeepSpeedAccelerator):
 
     def on_accelerator(self, tensor):
         device_str = str(tensor.device)
-        if device_str.startswith('cuda:'):
-            return True
-        else:
-            return False
+        return bool(device_str.startswith('cuda:'))
 
     def op_builder_dir(self):
         try:
@@ -265,42 +251,35 @@ class CUDA_Accelerator(DeepSpeedAccelerator):
     def _lazy_init_class_dict(self):
         if self.class_dict != None:
             return
-        else:
-            self.class_dict = {}
-            # begin initialize for create_op_builder()
-            # put all valid class name <--> class type mapping into class_dict
-            op_builder_dir = self.op_builder_dir()
-            op_builder_module = importlib.import_module(op_builder_dir)
-            op_builder_absolute_path = os.path.dirname(op_builder_module.__file__)
-            for _, module_name, _ in pkgutil.iter_modules([op_builder_absolute_path]):
+        self.class_dict = {}
+        # begin initialize for create_op_builder()
+        # put all valid class name <--> class type mapping into class_dict
+        op_builder_dir = self.op_builder_dir()
+        op_builder_module = importlib.import_module(op_builder_dir)
+        op_builder_absolute_path = os.path.dirname(op_builder_module.__file__)
+        for _, module_name, _ in pkgutil.iter_modules([op_builder_absolute_path]):
                 # avoid self references,
                 # skip sub_directories which contains ops for other backend(cpu, npu, etc.).
-                if module_name != 'all_ops' and module_name != 'builder' and not os.path.isdir(
+            if module_name != 'all_ops' and module_name != 'builder' and not os.path.isdir(
                         os.path.join(op_builder_absolute_path, module_name)):
-                    module = importlib.import_module("{}.{}".format(op_builder_dir, module_name))
-                    for member_name in module.__dir__():
-                        if member_name.endswith(
+                module = importlib.import_module(f"{op_builder_dir}.{module_name}")
+                for member_name in module.__dir__():
+                    if member_name.endswith(
                                 'Builder'
                         ) and member_name != "OpBuilder" and member_name != "CUDAOpBuilder" and member_name != "TorchCPUOpBuilder":  # avoid abstract classes
-                            if not member_name in self.class_dict:
-                                self.class_dict[member_name] = getattr(module, member_name)
+                        if member_name not in self.class_dict:
+                            self.class_dict[member_name] = getattr(module, member_name)
             # end initialize for create_op_builder()
 
     # create an instance of op builder and return, name specified by class_name
     def create_op_builder(self, class_name):
         self._lazy_init_class_dict()
-        if class_name in self.class_dict:
-            return self.class_dict[class_name]()
-        else:
-            return None
+        return self.class_dict[class_name]() if class_name in self.class_dict else None
 
     # return an op builder class, name specified by class_name
     def get_op_builder(self, class_name):
         self._lazy_init_class_dict()
-        if class_name in self.class_dict:
-            return self.class_dict[class_name]
-        else:
-            return None
+        return self.class_dict[class_name] if class_name in self.class_dict else None
 
     def build_extension(self):
         from torch.utils.cpp_extension import BuildExtension

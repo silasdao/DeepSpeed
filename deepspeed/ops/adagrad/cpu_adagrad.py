@@ -68,7 +68,7 @@ class DeepSpeedCPUAdagrad(torch.optim.Optimizer):
                     continue
 
                 assert p.device == device, f"CPUAdagrad param is on {p.device} and must be 'cpu', make " \
-                        "sure you enabled 'offload_optimizer': 'cpu' in your ZeRO config."
+                            "sure you enabled 'offload_optimizer': 'cpu' in your ZeRO config."
 
                 state = self.state[p]
                 # State initialization
@@ -96,14 +96,13 @@ class DeepSpeedCPUAdagrad(torch.optim.Optimizer):
                     state['exp_avg_sq'][sparse_exp_avg_sq.indices()] = sparse_exp_avg_sq.values()
                     if fp16_param_groups is not None:
                         fp16_param_groups[group_id][param_id][sparse_param.indices()] = sparse_param.values()
+                elif fp16_param_groups is None:
+                    self.ds_opt_adagrad.adagrad_update(self.opt_id, state['step'], group['lr'], group['eps'],
+                                                       group['weight_decay'], p.data, p.grad.data,
+                                                       state['exp_avg_sq'])
                 else:
-                    if fp16_param_groups is not None:
-                        self.ds_opt_adagrad.adagrad_update_copy(self.opt_id, state['step'], group['lr'], group['eps'],
-                                                                group['weight_decay'], p.data, p.grad.data,
-                                                                state['exp_avg_sq'],
-                                                                fp16_param_groups[group_id][param_id].data)
-                    else:
-                        self.ds_opt_adagrad.adagrad_update(self.opt_id, state['step'], group['lr'], group['eps'],
-                                                           group['weight_decay'], p.data, p.grad.data,
-                                                           state['exp_avg_sq'])
+                    self.ds_opt_adagrad.adagrad_update_copy(self.opt_id, state['step'], group['lr'], group['eps'],
+                                                            group['weight_decay'], p.data, p.grad.data,
+                                                            state['exp_avg_sq'],
+                                                            fp16_param_groups[group_id][param_id].data)
         return loss

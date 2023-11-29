@@ -51,14 +51,17 @@ def build_bloom_alibi_tensor(attention_mask: torch.Tensor, num_heads: int, dtype
     # https://github.com/huggingface/transformers/blob/f681437203baa7671de3174b0fa583c349d9d5e1/src/transformers/models/t5/modeling_t5.py#L527
     arange_tensor = ((attention_mask.cumsum(dim=-1) - 1) * attention_mask)[:, None, :]
     alibi = slopes[..., None] * arange_tensor
-    if dist.is_initialized():
-        num_heads_per_rank = get_shard_size(num_heads, dist.get_world_size())
-        offset = sum(get_shard_size_list(num_heads, dist.get_world_size())[0:dist.get_rank()])
-        alibi = alibi.view(batch_size, num_heads, 1, seq_length)
-        alibi = alibi[:, offset:num_heads_per_rank + offset, :, :]
-        return alibi.reshape(batch_size * num_heads_per_rank, 1, seq_length).to(dtype)
-    else:
+    if not dist.is_initialized():
         return alibi.reshape(batch_size * num_heads, 1, seq_length).to(dtype)
+    num_heads_per_rank = get_shard_size(num_heads, dist.get_world_size())
+    offset = sum(
+        get_shard_size_list(num_heads, dist.get_world_size())[
+            : dist.get_rank()
+        ]
+    )
+    alibi = alibi.view(batch_size, num_heads, 1, seq_length)
+    alibi = alibi[:, offset:num_heads_per_rank + offset, :, :]
+    return alibi.reshape(batch_size * num_heads_per_rank, 1, seq_length).to(dtype)
 
 
 def build_mpt_atten_bias_tensor(self,
@@ -74,7 +77,11 @@ def build_mpt_atten_bias_tensor(self,
                                                        sequence_id=sequence_id)
     if dist.is_initialized():
         num_heads_per_rank = get_shard_size(self.config.n_heads, dist.get_world_size())
-        offset = sum(get_shard_size_list(self.config.n_heads, dist.get_world_size())[0:dist.get_rank()])
+        offset = sum(
+            get_shard_size_list(self.config.n_heads, dist.get_world_size())[
+                : dist.get_rank()
+            ]
+        )
         attn_bias = attn_bias[:, offset:num_heads_per_rank + offset, :, :]
     return attn_bias, attention_mask
 

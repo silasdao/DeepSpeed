@@ -78,9 +78,7 @@ def dict_to_feature(feature_dict, keys, max_value=None):
 
     # normalization, should not matter in tree models
     if max_value is not None:
-        norm_feature = []
-        for f, mv in zip(feature, max_value):
-            norm_feature.append(f / mv)
+        norm_feature = [f / mv for f, mv in zip(feature, max_value)]
         feature = norm_feature
 
     return feature

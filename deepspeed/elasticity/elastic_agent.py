@@ -170,8 +170,8 @@ class DSElasticAgent(LocalElasticAgent):
             elif state == WorkerState.HEALTHY:
                 # membership changes do not count as retries
                 num_nodes_waiting = rdzv_handler.num_nodes_waiting()
-                group_rank = self._worker_group.group_rank
                 if num_nodes_waiting > 0:
+                    group_rank = self._worker_group.group_rank
                     log.info(f"[{role}] Detected {num_nodes_waiting} "
                              f"new nodes from group_rank={group_rank}; "
                              f"will restart worker group")

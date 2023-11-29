@@ -41,9 +41,7 @@ class SparsityConfig:
         if (seq_len % self.block != 0):
             raise ValueError(f'Sequence Length, {seq_len}, needs to be dividable by Block size {self.block}!')
         num_blocks = seq_len // self.block
-        # TODO Currently we allocate layout per head; needs to be updated if heads share a single layout.
-        layout = torch.zeros((self.num_heads, num_blocks, num_blocks), dtype=torch.int64)
-        return layout
+        return torch.zeros((self.num_heads, num_blocks, num_blocks), dtype=torch.int64)
 
     def check_and_propagate_first_head_layout(self, layout):
         """If all heads require same sparsity layout, it propagate first head layout to all heads
@@ -132,7 +130,7 @@ class FixedSparsityConfig(SparsityConfig):
             )
         self.num_global_blocks = num_global_blocks
 
-        if (attention != 'unidirectional' and attention != 'bidirectional'):
+        if attention not in ['unidirectional', 'bidirectional']:
             raise NotImplementedError('only \"uni/bi-directional\" attentions are supported for now!')
         self.attention = attention
 
@@ -142,7 +140,7 @@ class FixedSparsityConfig(SparsityConfig):
 
         if (num_different_global_patterns > 1 and not different_layout_per_head):
             raise ValueError(
-                f'Number of different layouts cannot be more than one when you have set a single layout for all heads! Set different_layout_per_head to True.'
+                'Number of different layouts cannot be more than one when you have set a single layout for all heads! Set different_layout_per_head to True.'
             )
         if (num_different_global_patterns > (num_local_blocks // num_global_blocks)):
             raise ValueError(
@@ -285,14 +283,14 @@ class VariableSparsityConfig(SparsityConfig):
                 raise ValueError(
                     f'Global block start indices length, {len(global_block_indices)}, must be same as global block end indices length, {len(global_block_end_indices)}!'
                 )
-            for _, (start_idx, end_idx) in enumerate(zip(global_block_indices, global_block_end_indices)):
+            for start_idx, end_idx in zip(global_block_indices, global_block_end_indices):
                 if start_idx >= end_idx:
                     raise ValueError(
                         f'Global block start index, {start_idx}, must be smaller than global block end index, {end_idx}!'
                     )
         self.global_block_end_indices = global_block_end_indices
 
-        if (attention != 'unidirectional' and attention != 'bidirectional'):
+        if attention not in ['unidirectional', 'bidirectional']:
             raise NotImplementedError('only \"uni/bi-directional\" attentions are supported for now!')
         self.attention = attention
 
@@ -375,7 +373,7 @@ class VariableSparsityConfig(SparsityConfig):
                     first_row = 0 if self.attention == 'bidirectional' else idx
                     layout[h, first_row:, idx] = 1
         else:
-            for _, (start_idx, end_idx) in enumerate(zip(self.global_block_indices, self.global_block_end_indices)):
+            for start_idx, end_idx in zip(self.global_block_indices, self.global_block_end_indices):
                 # if global block idx is in the range of the sequence blocks
                 if (start_idx < num_blocks):
                     end_idx = min(end_idx, num_blocks)
@@ -442,7 +440,7 @@ class BigBirdSparsityConfig(SparsityConfig):
         self.num_sliding_window_blocks = num_sliding_window_blocks
         self.num_global_blocks = num_global_blocks
 
-        if (attention != 'unidirectional' and attention != 'bidirectional'):
+        if attention not in ['unidirectional', 'bidirectional']:
             raise NotImplementedError('only \"uni/bi-directional\" attentions are supported for now!')
         self.attention = attention
 
@@ -586,7 +584,7 @@ class BSLongformerSparsityConfig(SparsityConfig):
                 raise ValueError(
                     f'Global block start indices length, {len(global_block_indices)}, must be same as global block end indices length, {len(global_block_end_indices)}!'
                 )
-            for _, (start_idx, end_idx) in enumerate(zip(global_block_indices, global_block_end_indices)):
+            for start_idx, end_idx in zip(global_block_indices, global_block_end_indices):
                 if start_idx >= end_idx:
                     raise ValueError(
                         f'Global block start index, {start_idx}, must be smaller than global block end index, {end_idx}!'
@@ -639,7 +637,7 @@ class BSLongformerSparsityConfig(SparsityConfig):
                     #global columns
                     layout[h, :, idx] = 1
         else:
-            for _, (start_idx, end_idx) in enumerate(zip(self.global_block_indices, self.global_block_end_indices)):
+            for start_idx, end_idx in zip(self.global_block_indices, self.global_block_end_indices):
                 # if global block idx is in the range of the sequence blocks
                 if (start_idx < num_blocks):
                     end_idx = min(end_idx, num_blocks)

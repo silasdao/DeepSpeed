@@ -81,9 +81,7 @@ class SparseSelfAttention(nn.Module):
 
     def transpose_key_for_scores(self, x, L):
         bsz, num_heads, seq_len, head_dim = x.size()
-        if seq_len != L:
-            return x.permute(0, 1, 3, 2)
-        return x
+        return x.permute(0, 1, 3, 2) if seq_len != L else x
 
     def transpose_mask_for_sparse(self, qtype, x, is_key_padding_mask=False):
         x = x.type(qtype)
@@ -144,6 +142,4 @@ class SparseSelfAttention(nn.Module):
                                              key_padding_mask_mode=self.key_padding_mask_mode,
                                              attn_mask_mode=self.attn_mask_mode)
 
-        # outputs
-        attn_output = sparse_dot_dsd_nn(attn_output_weights, value)
-        return attn_output
+        return sparse_dot_dsd_nn(attn_output_weights, value)

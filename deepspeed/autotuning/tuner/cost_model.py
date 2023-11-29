@@ -42,7 +42,7 @@ class XGBoostCostModel():
                 "objective": "rank:pairwise",
             }
         else:
-            raise RuntimeError("Invalid loss type: " + loss_type)
+            raise RuntimeError(f"Invalid loss type: {loss_type}")
 
         self.xgb_params["verbosity"] = 0
         if num_threads:

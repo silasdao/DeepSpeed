@@ -56,8 +56,7 @@ def get_valid_gpus(batch_size, micro_batches, min_valid_gpus, max_valid_gpus):
                 if max_gpus % i == 0:
                     valid_gpus.append(i)
     valid_gpus = set(valid_gpus)
-    valid_gpus = sorted(list(valid_gpus))
-    return valid_gpus
+    return sorted(list(valid_gpus))
 
 
 def get_best_candidates(candidate_batch_sizes, micro_batches, min_gpus, max_gpus, prefer_larger):
@@ -105,7 +104,7 @@ def _get_compatible_gpus_v01(micro_batches,
     min_gpus = min_gpus or 1
     max_gpus = max_gpus or max_acceptable_batch_size // min(micro_batches)
 
-    if not all(mb <= max_acceptable_batch_size for mb in micro_batches):
+    if any(mb > max_acceptable_batch_size for mb in micro_batches):
         raise ValueError(f"All micro batches must be less than \
             or equal to max_acceptable_batch_size: {max_acceptable_batch_size}")
 
@@ -315,18 +314,17 @@ def compute_elastic_config(ds_config: dict, target_deepspeed_version: str, world
     elif float(elastic_config.version) == 0.2:
         if world_size != 0:
             current_num_gpus = world_size
-        else:
-            if "WORLD_SIZE" in os.environ and \
+        elif "WORLD_SIZE" in os.environ and \
                 os.getenv('WORLD_SIZE').isnumeric():
-                current_num_gpus = int(os.getenv('WORLD_SIZE'))
-            else:
-                WORLD_SIZE = os.getenv('WORLD_SIZE')
-                raise ElasticityConfigError(
-                    'Elasticity V 0.2 needs WORLD_SIZE '\
-                    'to compute valid batch size. '\
-                    'Either give it as argument to function compute_elastic_config '\
-                    'or set it as an environment variable. '\
-                    f'Value of WORLD_SIZE as environment variable is {WORLD_SIZE}')
+            current_num_gpus = int(os.getenv('WORLD_SIZE'))
+        else:
+            WORLD_SIZE = os.getenv('WORLD_SIZE')
+            raise ElasticityConfigError(
+                'Elasticity V 0.2 needs WORLD_SIZE '\
+                'to compute valid batch size. '\
+                'Either give it as argument to function compute_elastic_config '\
+                'or set it as an environment variable. '\
+                f'Value of WORLD_SIZE as environment variable is {WORLD_SIZE}')
 
         final_batch_size, valid_gpus, candidate_microbatch_size = _get_compatible_gpus_v02(
             micro_batches=elastic_config.micro_batches,
@@ -349,30 +347,37 @@ def compute_elastic_config(ds_config: dict, target_deepspeed_version: str, world
             raise ElasticityIncompatibleWorldSize(f"World size ({world_size}) is not valid " \
         f"with the current list of valid GPU counts: {valid_gpus}")
 
-        # Pick largest valid micro batch size
-        micro_batch_size = None
-        for mbsz in sorted(list(set(elastic_config.micro_batches)), reverse=True):
-            if final_batch_size // world_size % mbsz == 0:
-                micro_batch_size = mbsz
-                break
+        micro_batch_size = next(
+            (
+                mbsz
+                for mbsz in sorted(
+                    list(set(elastic_config.micro_batches)), reverse=True
+                )
+                if final_batch_size // world_size % mbsz == 0
+            ),
+            None,
+        )
         assert micro_batch_size is not None, "Unable to find divisible micro batch size" \
             f" world_size={world_size}, final_batch_size={final_batch_size}, and " \
             f" micro_batches={elastic_config.micro_batches}."
         return final_batch_size, valid_gpus, micro_batch_size
 
     if return_microbatch:
-        # Pick a valid micro batch size
         if float(elastic_config.version) == 0.2:
             return final_batch_size, valid_gpus, candidate_microbatch_size
-        else:
-            micro_batch_size = None
-            for mbsz in sorted(list(set(elastic_config.micro_batches)), reverse=True):
-                if final_batch_size // world_size % mbsz == 0:
-                    micro_batch_size = mbsz
-                    break
-            assert micro_batch_size is not None, "Unable to find divisible micro batch size" \
-                    f" world_size={world_size}, final_batch_size={final_batch_size}, and " \
-                    f" micro_batches={elastic_config.micro_batches}."
-            return final_batch_size, valid_gpus, micro_batch_size
+        micro_batch_size = next(
+            (
+                mbsz
+                for mbsz in sorted(
+                    list(set(elastic_config.micro_batches)), reverse=True
+                )
+                if final_batch_size // world_size % mbsz == 0
+            ),
+            None,
+        )
+        assert micro_batch_size is not None, "Unable to find divisible micro batch size" \
+                f" world_size={world_size}, final_batch_size={final_batch_size}, and " \
+                f" micro_batches={elastic_config.micro_batches}."
+        return final_batch_size, valid_gpus, micro_batch_size
 
     return final_batch_size, valid_gpus

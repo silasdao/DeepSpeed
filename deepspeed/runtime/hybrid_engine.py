@@ -104,15 +104,14 @@ class DeepSpeedHybridEngine(DeepSpeedEngine):
             layer_id=layer_id,
             child=orig_layer)
 
-        if self.mpu is not None:
-            if hasattr(self.mpu, 'get_model_parallel_world_size'):
-                _container.set_tensor_parallel_config(self.mpu.get_model_parallel_world_size(),
-                                                      self.mpu.get_model_parallel_group())
-            else:
-                _container.set_tensor_parallel_config(self.mpu.get_tensor_model_parallel_world_size(),
-                                                      self.mpu.get_tensor_model_parallel_group())
-        else:
+        if self.mpu is None:
             _container.set_tensor_parallel_config(self._config.hybrid_engine.inference_tp_size, self.mp_group)
+        elif hasattr(self.mpu, 'get_model_parallel_world_size'):
+            _container.set_tensor_parallel_config(self.mpu.get_model_parallel_world_size(),
+                                                  self.mpu.get_model_parallel_group())
+        else:
+            _container.set_tensor_parallel_config(self.mpu.get_tensor_model_parallel_world_size(),
+                                                  self.mpu.get_tensor_model_parallel_group())
         _container.initialize_tensors(enable_training=True)
         _container.create_ds_model_config()
         _container.create_module()
@@ -168,13 +167,12 @@ class DeepSpeedHybridEngine(DeepSpeedEngine):
                 get_accelerator().empty_cache()
                 retake_success = inference_cuda_module.retake_workspace()
 
-                if not retake_success:
-                    raise RuntimeError("Unable to retake inference workspace.")
+            if not retake_success:
+                raise RuntimeError("Unable to retake inference workspace.")
 
     def generate(self, *inputs, **kwargs):
         if self._total_batch_size is None:
-            bsz = inputs[0].shape[0] if len(inputs) > 0 else \
-                kwargs['input_ids'].shape[0]
+            bsz = inputs[0].shape[0] if inputs else kwargs['input_ids'].shape[0]
             self._total_batch_size = bsz * dist.get_world_size()
 
         self._t0 = time.time()
@@ -213,16 +211,26 @@ class DeepSpeedHybridEngine(DeepSpeedEngine):
 
                 self._gather_latency = time.time() - self._t0
 
-                input_shape = inputs[0].shape if len(inputs) > 0 else \
-                                kwargs['input_ids'].shape
+                input_shape = inputs[0].shape if inputs else kwargs['input_ids'].shape
                 output = torch.zeros(
-                    (input_shape[0] * self._config.hybrid_engine.inference_tp_size, ) + input_shape[1:],
-                    dtype=inputs[0].dtype if len(inputs) > 0 else kwargs['input_ids'].dtype,
-                    device=inputs[0].device if len(inputs) > 0 else kwargs['input_ids'].device)
-                input_cont = inputs[0].contiguous() if len(inputs) > 0 else kwargs['input_ids'].contiguous()
+                    (
+                        input_shape[0]
+                        * self._config.hybrid_engine.inference_tp_size,
+                    )
+                    + input_shape[1:],
+                    dtype=inputs[0].dtype if inputs else kwargs['input_ids'].dtype,
+                    device=inputs[0].device
+                    if inputs
+                    else kwargs['input_ids'].device,
+                )
+                input_cont = (
+                    inputs[0].contiguous()
+                    if inputs
+                    else kwargs['input_ids'].contiguous()
+                )
                 dist.all_gather_into_tensor(output, input_cont, group=self.mp_group)
 
-                if len(inputs) > 0:
+                if inputs:
                     inputs = (output, *inputs[1:])
                 else:
                     kwargs['input_ids'] = output

@@ -41,19 +41,18 @@ class CPU_Accelerator(DeepSpeedAccelerator):
         device_count = int(os.environ.get('LOCAL_SIZE', 0))
         if device_count > 0:
             return device_count
-        else:
-            from deepspeed.utils.numa import get_numa_cores
-            # Count NUMA node for number of cpu accelerators. On machine with HBM
-            # In flat mode, HBM is in separate NUMA node with no cores on this node.
-            # Ignore these NUMA nodes with no cores.
-            numa_core_lists = get_numa_cores()
-            numa_count = 0
-            prev_core_list = []
-            for core_list in numa_core_lists:
-                if len(core_list) > 0 and core_list != prev_core_list:
-                    numa_count += 1
-                    prev_core_list = core_list
-            return numa_count
+        from deepspeed.utils.numa import get_numa_cores
+        # Count NUMA node for number of cpu accelerators. On machine with HBM
+        # In flat mode, HBM is in separate NUMA node with no cores on this node.
+        # Ignore these NUMA nodes with no cores.
+        numa_core_lists = get_numa_cores()
+        numa_count = 0
+        prev_core_list = []
+        for core_list in numa_core_lists:
+            if len(core_list) > 0 and core_list != prev_core_list:
+                numa_count += 1
+                prev_core_list = core_list
+        return numa_count
 
     def synchronize(self, device_index=None):
         return
@@ -63,7 +62,7 @@ class CPU_Accelerator(DeepSpeedAccelerator):
         return torch.random
 
     def set_rng_state(self, new_state, device_index=None):
-        if device_index == None:
+        if device_index is None:
             return torch.set_rng_state(new_state)
         return torch.set_rng_state(new_state, device_index)
 
@@ -140,10 +139,10 @@ class CPU_Accelerator(DeepSpeedAccelerator):
 
     def memory_stats(self, device_index=None):
         mem = self.get_rss()
-        mem_stat = {}
-        mem_stat['allocated_bytes.all.current'] = mem
-        mem_stat['allocated_bytes.all.peak'] = self.max_mem
-        return mem_stat
+        return {
+            'allocated_bytes.all.current': mem,
+            'allocated_bytes.all.peak': self.max_mem,
+        }
 
     def reset_peak_memory_stats(self, device_index=None):
         self.reset_rss()
@@ -245,17 +244,12 @@ class CPU_Accelerator(DeepSpeedAccelerator):
 
     def on_accelerator(self, tensor):
         device_str = str(tensor.device)
-        if device_str.startswith('cpu'):
-            return True
-        else:
-            return False
+        return bool(device_str.startswith('cpu'))
 
     # create an instance of op builder and return, name specified by class_name
     def create_op_builder(self, op_name):
         builder_class = self.get_op_builder(op_name)
-        if builder_class != None:
-            return builder_class()
-        return None
+        return builder_class() if builder_class != None else None
 
     # return an op builder class, name specified by class_name
     def get_op_builder(self, class_name):

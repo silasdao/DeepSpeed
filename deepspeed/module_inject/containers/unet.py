@@ -35,19 +35,18 @@ class UNetPolicy(DSPolicy):
         kw = client_module.to_k.weight
         vw = client_module.to_v.weight
 
-        if qw.shape[1] == kw.shape[1]:
-            qkvw = Parameter(torch.cat((qw, kw, vw), dim=0), requires_grad=False)
-
-            return qkvw, \
-                   client_module.to_out[0].weight, \
-                   client_module.to_out[0].bias, \
-                   qw.shape[-1], \
-                   client_module.heads
-        else:
+        if qw.shape[1] != kw.shape[1]:
             #return None
             #kvw = Parameter(torch.cat((kw, vw), dim=0), requires_grad=False)
             return qw, \
-                   kw, vw, \
+                       kw, vw, \
+                       client_module.to_out[0].weight, \
+                       client_module.to_out[0].bias, \
+                       qw.shape[-1], \
+                       client_module.heads
+        qkvw = Parameter(torch.cat((qw, kw, vw), dim=0), requires_grad=False)
+
+        return qkvw, \
                    client_module.to_out[0].weight, \
                    client_module.to_out[0].bias, \
                    qw.shape[-1], \
